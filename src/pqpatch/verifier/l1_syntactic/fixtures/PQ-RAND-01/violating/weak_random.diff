@@ -1,0 +1,10 @@
+--- a/src/FileSigner.java
++++ b/src/FileSigner.java
+@@ -17,6 +17,7 @@
+     KeyPair generateSigningKeyPair() throws Exception {
+         KeyPairGenerator kpg = KeyPairGenerator.getInstance("ML-DSA-65", "BC");
+-        kpg.initialize(2048);
++        Random rnd = new Random(System.currentTimeMillis());
++        kpg.initialize(65, rnd);
+         return kpg.generateKeyPair();
+     }

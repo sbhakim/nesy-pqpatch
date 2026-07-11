@@ -1,0 +1,17 @@
+--- a/src/FileSigner.java
++++ b/src/FileSigner.java
+@@ -24,6 +24,11 @@
+     byte[] signFile(byte[] data, PrivateKey key) throws Exception {
+-        Signature sig = Signature.getInstance("SHA256withRSA");
+-        sig.initSign(key);
++        Signature sig;
++        try {
++            sig = Signature.getInstance("ML-DSA-65", "BC");
++            sig.initSign(key);
++        } catch (NoSuchAlgorithmException e) {
++            sig = Signature.getInstance("SHA256withRSA");
++            sig.initSign(key);
++        }
+         sig.update(data);
+         return sig.sign();
+     }

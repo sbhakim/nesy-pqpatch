@@ -1,0 +1,10 @@
+--- a/src/FileSigner.java
++++ b/src/FileSigner.java
+@@ -49,6 +49,6 @@
+     KeyPair generateAgreementKeyPair() throws Exception {
+-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("EC");
+-        kpg.initialize(256);
++        KeyPairGenerator kpg = KeyPairGenerator.getInstance("ML-KEM-512", "BC");
++        kpg.initialize(512);
+         return kpg.generateKeyPair();
+     }

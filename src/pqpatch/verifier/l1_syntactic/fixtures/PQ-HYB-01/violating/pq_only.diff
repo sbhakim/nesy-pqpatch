@@ -1,0 +1,9 @@
+--- a/src/FileSigner.java
++++ b/src/FileSigner.java
+@@ -55,5 +55,6 @@
+     byte[] deriveSharedSecret(PrivateKey myKey, PublicKey theirKey) throws Exception {
+-        KeyAgreement ka = KeyAgreement.getInstance("ECDH");
+-        ka.init(myKey);
++        byte[] pqSecret = mlkemDecapsulate(myKey, theirKey); // ML-KEM-768 only
++        return pqSecret;
+     }

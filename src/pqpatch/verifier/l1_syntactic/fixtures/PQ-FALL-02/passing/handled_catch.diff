@@ -1,0 +1,15 @@
+--- a/src/FileSigner.java
++++ b/src/FileSigner.java
+@@ -24,6 +24,9 @@
+     byte[] signFile(byte[] data, PrivateKey key) throws Exception {
+         Signature sig = Signature.getInstance("ML-DSA-65", "BC");
+-        sig.initSign(key);
++        try {
++            sig.initSign(key);
++        } catch (InvalidKeyException e) {
++            log.error("ML-DSA key initialization failed", e);
++            throw e;
++        }
+         sig.update(data);
+         return sig.sign();
+     }

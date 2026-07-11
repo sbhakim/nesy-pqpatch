@@ -1,0 +1,12 @@
+--- a/src/FileSigner.java
++++ b/src/FileSigner.java
+@@ -24,3 +24,3 @@
+     byte[] signFile(byte[] data, PrivateKey key) throws Exception {
+-        Signature sig = Signature.getInstance("SHA256withRSA");
++        Signature sig = Signature.getInstance("ML-DSA-65", "BC");
+         sig.initSign(key);
+--- a/src/BuildConfig.java
++++ b/src/BuildConfig.java
+@@ -3,1 +3,1 @@
+-    static final boolean STRICT_MODE = false;
++    static final boolean STRICT_MODE = true;
