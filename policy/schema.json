@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pqpatch/policy.schema.json",
+  "title": "PQPatch migration policy",
+  "type": "object",
+  "required": ["name", "version", "floors", "hybrid_required", "allowed_randomness_sources"],
+  "properties": {
+    "name": { "type": "string" },
+    "version": { "type": "string" },
+    "floors": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^ML-(KEM|DSA)-[0-9]{2,4}$|^SLH-DSA-.+$"
+      }
+    },
+    "hybrid_required": {
+      "type": "object",
+      "additionalProperties": { "type": "boolean" }
+    },
+    "allowed_randomness_sources": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    }
+  },
+  "additionalProperties": false
+}

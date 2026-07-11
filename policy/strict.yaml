@@ -1,0 +1,20 @@
+# Category-5 floor variant used for the policy ablation
+# (codebase-plan.md experiments/, "policy strict/default").
+name: strict
+version: v1
+
+floors:
+  kem: ML-KEM-1024
+  sign: ML-DSA-87
+  verify: ML-DSA-87
+  envelope: ML-KEM-1024
+
+hybrid_required:
+  kem: true
+  sign: false
+  verify: false
+  envelope: true
+  config: false
+
+allowed_randomness_sources:
+  - SecureRandom

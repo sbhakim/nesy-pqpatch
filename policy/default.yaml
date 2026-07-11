@@ -1,0 +1,23 @@
+# Default migration policy Pi (manuscript Table: "Migration policy worked default").
+# Loaded via pqpatch.policy.load_policy(); consumed as a Policy dataclass by
+# every rule, never as raw YAML (codebase-plan.md §4).
+name: default
+version: v1
+
+floors:
+  kem: ML-KEM-768
+  sign: ML-DSA-65
+  verify: ML-DSA-65
+  envelope: ML-KEM-768
+  # config: no floor -- config-class sites are a detection-coverage
+  # question (RQ0), not yet a migration-target question.
+
+hybrid_required:
+  kem: true
+  sign: false
+  verify: false
+  envelope: false
+  config: false
+
+allowed_randomness_sources:
+  - SecureRandom
