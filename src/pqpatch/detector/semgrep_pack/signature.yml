@@ -1,0 +1,23 @@
+rules:
+  - id: pq-detect-signature
+    languages: [java]
+    severity: WARNING
+    message: >-
+      Quantum-vulnerable signature algorithm. RSA/ECDSA/DSA signatures must
+      migrate to ML-DSA (FIPS 204) or SLH-DSA (FIPS 205). Usage class SIGN or
+      VERIFY, resolved by pqpatch.detector.classify from initSign/initVerify
+      call sites in the same method.
+    metadata:
+      usage_hint: ambiguous  # SIGN or VERIFY
+      cwe: CWE-327
+    patterns:
+      - pattern-either:
+          - pattern: Signature.getInstance("SHA256withRSA")
+          - pattern: Signature.getInstance("SHA384withRSA")
+          - pattern: Signature.getInstance("SHA512withRSA")
+          - pattern: Signature.getInstance("SHA256withECDSA")
+          - pattern: Signature.getInstance("SHA384withECDSA")
+          - pattern: Signature.getInstance("SHA512withECDSA")
+          - pattern: Signature.getInstance("SHA1withRSA")
+          - pattern: Signature.getInstance("NONEwithECDSA")
+          - pattern: Signature.getInstance("SHA256withDSA")

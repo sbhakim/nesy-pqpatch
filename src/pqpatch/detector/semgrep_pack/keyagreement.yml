@@ -1,0 +1,16 @@
+rules:
+  - id: pq-detect-keyagreement
+    languages: [java]
+    severity: WARNING
+    message: >-
+      Quantum-vulnerable key agreement. ECDH/DH key exchange must migrate to
+      ML-KEM encapsulation (FIPS 203), typically combined into a hybrid
+      construction per Manuscript-ACM/main.tex U6. Usage class KEM.
+    metadata:
+      usage_hint: kem
+      cwe: CWE-327
+    patterns:
+      - pattern-either:
+          - pattern: KeyAgreement.getInstance("ECDH")
+          - pattern: KeyAgreement.getInstance("DH")
+          - pattern: KeyAgreement.getInstance("X25519")

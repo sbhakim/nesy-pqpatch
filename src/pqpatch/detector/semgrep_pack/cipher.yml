@@ -1,0 +1,16 @@
+rules:
+  - id: pq-detect-cipher-envelope
+    languages: [java]
+    severity: WARNING
+    message: >-
+      Quantum-vulnerable envelope encryption. RSA-based key transport must
+      migrate to an ML-KEM encapsulation plus AES-256-GCM KEM-DEM construction
+      per FIPS 203. Usage class ENVELOPE.
+    metadata:
+      usage_hint: envelope
+      cwe: CWE-327
+    patterns:
+      - pattern-either:
+          - pattern: Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding")
+          - pattern: Cipher.getInstance("RSA/ECB/PKCS1Padding")
+          - pattern: Cipher.getInstance("RSA")

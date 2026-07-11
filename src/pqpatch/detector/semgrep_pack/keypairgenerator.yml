@@ -1,0 +1,20 @@
+rules:
+  - id: pq-detect-keypairgenerator
+    languages: [java]
+    severity: WARNING
+    message: >-
+      Quantum-vulnerable key-pair generation. RSA/EC/DSA key generation must
+      migrate to ML-KEM (key establishment) or ML-DSA (signatures) per FIPS
+      203/204. See Manuscript-ACM/main.tex Sec. 3 (usage class KEM or SIGN,
+      resolved by pqpatch.detector.classify from surrounding call sites).
+    metadata:
+      usage_hint: ambiguous  # KEM or SIGN; classify.py disambiguates
+      cwe: CWE-327
+    patterns:
+      - pattern-either:
+          - pattern: KeyPairGenerator.getInstance("RSA")
+          - pattern: KeyPairGenerator.getInstance("RSA", $PROVIDER)
+          - pattern: KeyPairGenerator.getInstance("EC")
+          - pattern: KeyPairGenerator.getInstance("EC", $PROVIDER)
+          - pattern: KeyPairGenerator.getInstance("DSA")
+          - pattern: KeyPairGenerator.getInstance("DiffieHellman")
