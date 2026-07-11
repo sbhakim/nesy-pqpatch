@@ -1,0 +1,45 @@
+You are migrating a single quantum-vulnerable cryptographic call site to a
+post-quantum-safe equivalent. Output ONLY a unified diff for the file below,
+followed by a JSON object on its own final line describing your patch.
+
+# Site
+File: {{ site.file_path }}
+Line: {{ site.line }}
+Usage class: {{ site.usage_class.value }}
+Matched API: {{ site.matched_symbol }}
+
+# Enclosing class
+{{ context.enclosing_class }}
+
+# Enclosing method (migrate only within this method's scope)
+```
+{{ context.enclosing_method }}
+```
+
+# Migration policy
+{% for usage_class, floor in policy.floors.items() -%}
+- {{ usage_class.value }}: minimum {{ floor }}{% if policy.hybrid_required.get(usage_class, false) %} (hybrid with a classical component REQUIRED){% endif %}
+
+{% endfor -%}
+Approved randomness sources: {{ policy.allowed_randomness_sources | join(", ") }}
+
+Rules that MUST hold in your patch:
+- Never fall back to a classical algorithm on any error path.
+- Never leave a signature-verification result unchecked.
+- Never reuse a key object across algorithm families.
+- Only use the approved randomness sources listed above.
+- If hybrid is required for this usage class, retain BOTH the classical and
+  post-quantum key-exchange contributions.
+- Do not modify any file other than {{ site.file_path }}.
+
+{% if feedback %}
+# Feedback on your previous attempt (attempt {{ attempt }})
+Your previous patch was REJECTED for this reason:
+{{ feedback }}
+
+Propose a corrected patch that addresses this specific violation.
+{% endif -%}
+
+# Required output format
+1. A unified diff (--- a/{{ site.file_path }} / +++ b/{{ site.file_path }}).
+2. A final line of JSON: {"primitive": "<name>", "parameters": "<params>"}
