@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint-type-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests
+      - run: mypy
+      - run: pytest tests/unit tests/rules -v --cov=src/pqpatch --cov-report=term-missing
+
+  smoke-offline:
+    runs-on: ubuntu-latest
+    needs: lint-type-unit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -e ".[dev]"
+      - run: PQPATCH_OFFLINE=1 pytest tests/integration/test_smoke.py -v
+
+  rule-freeze-guard:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fail if a PR touches held-out traps after rules-v1.0 is tagged
+        run: |
+          if git rev-parse rules-v1.0 >/dev/null 2>&1; then
+            if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q '^corpus/traps/heldout/'; then
+              echo "PR modifies corpus/traps/heldout/ after rules-v1.0 freeze. Blocked (codebase-plan.md invariant 5)." >&2
+              exit 1
+            fi
+          fi
