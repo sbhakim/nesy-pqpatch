@@ -1,0 +1,48 @@
+# Ground truth for Tier-2 reference app #1 (file-signing CLI).
+# Consumed by tests/integration/test_detector_tier2.py to compute detector
+# precision/recall per codebase-plan.md §1.2 Stage A.
+#
+# `detectable: true` sites use a literal algorithm-string JCA call and are
+# expected to be found by the current semgrep pack.
+# `detectable: false` sites are seeded specifically to be missed (RQ0 miss
+# rate) -- see FileSigner.java's "DELIBERATELY HARD SITE" comment.
+
+app: file-signing-cli
+file: src/FileSigner.java
+
+sites:
+  - line: 17
+    usage_class: sign          # KeyPairGenerator("RSA"), paired with initSign at line 24-26
+    detectable: true
+    note: KeyPairGenerator paired with a later Signature/initSign use
+
+  - line: 24
+    usage_class: sign
+    detectable: true
+
+  - line: 32
+    usage_class: verify
+    detectable: true
+
+  - line: 40
+    usage_class: envelope
+    detectable: true
+
+  - line: 49
+    usage_class: kem            # KeyPairGenerator("EC") feeds deriveSharedSecret's ECDH agreement;
+    detectable: true            # classify.py finds "KeyAgreement" within its 20-line forward
+                                 # window (line 55) and correctly resolves this to KEM.
+
+  - line: 55
+    usage_class: kem
+    detectable: true
+
+  - line: 67
+    usage_class: envelope       # true usage class if it were detectable; algorithm arrives
+    detectable: false           # from Properties, so no literal string exists to match.
+    note: configuration-driven algorithm name; expected detector miss (RQ0)
+
+counts:
+  total_sites: 7
+  detectable: 6
+  expected_miss: 1
