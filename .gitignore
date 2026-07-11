@@ -1,0 +1,81 @@
+# ---------------------------------------------------------------------------
+# Experiment output: results are never committed. Tables and figures are
+# regenerated from run manifests; the runs directory stays empty in git.
+# ---------------------------------------------------------------------------
+runs/*
+!runs/.gitkeep
+
+# Model-response cache payloads. The canonical archive lives on Zenodo
+# (referenced by checksum); the git tree carries only the directory marker.
+src/pqpatch/proposer/cache/*
+!src/pqpatch/proposer/cache/.gitkeep
+
+# Generated corpus variants: rebuilt by corpus/tier1/mutate.py, never edited.
+corpus/tier1/mutated/*
+!corpus/tier1/mutated/.gitkeep
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+*.egg
+
+# Tooling caches and coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# ---------------------------------------------------------------------------
+# Java build artifacts (corpus reference applications)
+# ---------------------------------------------------------------------------
+*.class
+*.jar
+target/
+.gradle/
+out/
+
+# ---------------------------------------------------------------------------
+# Secrets and local configuration -- never committed under any circumstances
+# ---------------------------------------------------------------------------
+.env
+.env.*
+*.pem
+*.key
+*_api_key*
+*.local.yaml
+.envrc
+
+# ---------------------------------------------------------------------------
+# Editors and operating systems
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ---------------------------------------------------------------------------
+# Scratch and temporary files
+# ---------------------------------------------------------------------------
+*.tmp
+*.bak
+*.orig
+scratch/
+docs/scratch/
