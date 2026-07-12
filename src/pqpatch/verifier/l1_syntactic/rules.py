@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 
 from pqpatch.model import Layer, Patch, Policy, RuleStatus, Site, UnsafeClass
-from pqpatch.verifier.rules.diffutil import added_lines, touched_files
+from pqpatch.verifier.rules.diffutil import added_lines, path_in_scope, touched_files
 from pqpatch.verifier.rules.registry import register
 from pqpatch.verifier.rules.spec import RuleOutcome, RuleSpec
 
@@ -239,12 +239,18 @@ register(
 
 def _check_scope(patch: Patch, site: Site, policy: Policy) -> RuleOutcome:
     del policy
-    files = touched_files(patch.unified_diff)
-    unexpected = files - {site.file_path}
+    # Match by normalized path, not exact string: a correctly scoped patch may
+    # spell the target file as a basename, a repo-relative path, or an absolute
+    # one depending on the model, and a//b/ prefixes and leading slashes vary.
+    # path_in_scope treats those as the same file while still rejecting a
+    # genuinely different one (see diffutil.path_in_scope).
+    unexpected = sorted(
+        f for f in touched_files(patch.unified_diff) if not path_in_scope(f, site.file_path)
+    )
     if unexpected:
         return RuleOutcome(
             RuleStatus.FAIL,
-            detail=f"patch modifies file(s) outside the permitted scope: {sorted(unexpected)}",
+            detail=f"patch modifies file(s) outside the permitted scope: {unexpected}",
         )
     return _PASS
 

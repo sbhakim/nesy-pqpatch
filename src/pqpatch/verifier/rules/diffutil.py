@@ -2,6 +2,34 @@
 
 from __future__ import annotations
 
+from pathlib import PurePosixPath
+
+
+def _normalized_parts(path: str) -> tuple[str, ...]:
+    path = path.strip().removeprefix("a/").removeprefix("b/").lstrip("/")
+    return PurePosixPath(path).parts if path else ()
+
+
+def path_in_scope(touched: str, site_path: str) -> bool:
+    """True iff `touched` names the same file as `site_path`, tolerant of the
+    a//b/ prefixes, leading slashes, and relative-vs-absolute spellings that
+    different models emit for the same file.
+
+    Match iff the shorter path's components are a suffix of the longer's, so
+    ``FileSigner.java``, ``src/FileSigner.java``, and
+    ``/abs/.../src/FileSigner.java`` all match a site at
+    ``/abs/.../src/FileSigner.java`` -- while ``Other.java`` or a same-named file
+    in a different directory do not. This distinguishes a formatting difference
+    (in scope) from a genuinely different file (out of scope), which a plain
+    string compare cannot.
+    """
+    t = _normalized_parts(touched)
+    s = _normalized_parts(site_path)
+    if not t or not s:
+        return False
+    short, long_ = (t, s) if len(t) <= len(s) else (s, t)
+    return long_[len(long_) - len(short) :] == short
+
 
 def added_lines(unified_diff: str) -> list[str]:
     """Return the content of every '+' line in a unified diff, excluding the
