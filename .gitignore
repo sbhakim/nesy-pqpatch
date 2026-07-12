@@ -77,5 +77,8 @@ Thumbs.db
 *.tmp
 *.bak
 *.orig
+*.local.md
+notes.md
+progress.md
 scratch/
 docs/scratch/
