@@ -1,0 +1,6 @@
+--- a/src/FileSigner.java
++++ b/src/FileSigner.java
+@@ -54,2 +54,3 @@
+     byte[] deriveSharedSecret(PrivateKey myKey, PublicKey theirKey) throws Exception {
++        // TODO: migrate this to a post-quantum KEM
+         KeyAgreement ka = KeyAgreement.getInstance("ECDH");

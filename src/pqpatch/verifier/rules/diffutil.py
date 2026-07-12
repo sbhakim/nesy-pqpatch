@@ -43,6 +43,18 @@ def added_lines(unified_diff: str) -> list[str]:
     return out
 
 
+def removed_lines(unified_diff: str) -> list[str]:
+    """Return the content of every '-' line in a unified diff, excluding the
+    '---' file-header line and the leading '-' marker itself."""
+    out: list[str] = []
+    for raw in unified_diff.splitlines():
+        if raw.startswith("---"):
+            continue
+        if raw.startswith("-"):
+            out.append(raw[1:])
+    return out
+
+
 def touched_files(unified_diff: str) -> set[str]:
     """Return the set of file paths a unified diff modifies, read from '+++' headers."""
     files: set[str] = set()

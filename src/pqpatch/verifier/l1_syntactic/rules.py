@@ -12,7 +12,12 @@ import re
 from pathlib import Path
 
 from pqpatch.model import Layer, Patch, Policy, RuleStatus, Site, UnsafeClass
-from pqpatch.verifier.rules.diffutil import added_lines, path_in_scope, touched_files
+from pqpatch.verifier.rules.diffutil import (
+    added_lines,
+    path_in_scope,
+    removed_lines,
+    touched_files,
+)
 from pqpatch.verifier.rules.registry import register
 from pqpatch.verifier.rules.spec import RuleOutcome, RuleSpec
 
@@ -268,5 +273,55 @@ register(
         ),
         check=_check_scope,
         fixtures_dir=_FIXTURES / "PQ-SCOPE-01",
+    )
+)
+
+# --- PQ-MIG-01: migration obligation (no specific U-class) ------------------
+#
+# Every other rule is a prohibition ("do not weaken / fall back / drop
+# verification"); a patch that changes nothing satisfies all of them. This rule
+# supplies the missing positive obligation from the formal task -- the detected
+# vulnerable primitive must actually be replaced by a permitted post-quantum one
+# -- so a vacuous or misdirected patch cannot be accepted while leaving the
+# quantum-vulnerable call in place. (Found by a real run: local models produced
+# no-op patches the verifier accepted.)
+
+_PQ_PRIMITIVE_RE = re.compile(r"ML-KEM|ML-DSA|SLH-DSA")
+# Classical primitives whose removal marks a genuine migration at the site.
+# (?<!ML-) keeps the migrated primitive itself from matching as "classical".
+_CLASSICAL_AT_SITE_RE = re.compile(r'RSA|ECDSA|(?<!ML-)DSA|ECDH|DiffieHellman|3?DES|"EC"')
+
+
+def _check_migration_obligation(patch: Patch, site: Site, policy: Policy) -> RuleOutcome:
+    del site, policy
+    if not any(_PQ_PRIMITIVE_RE.search(line) for line in added_lines(patch.unified_diff)):
+        return RuleOutcome(
+            RuleStatus.FAIL,
+            detail="patch introduces no permitted post-quantum primitive "
+            "(ML-KEM/ML-DSA/SLH-DSA); the vulnerable site is not migrated",
+        )
+    if not any(_CLASSICAL_AT_SITE_RE.search(line) for line in removed_lines(patch.unified_diff)):
+        return RuleOutcome(
+            RuleStatus.FAIL,
+            detail="patch removes no classical primitive; the migration is vacuous "
+            "(the quantum-vulnerable call is left in place)",
+        )
+    return _PASS
+
+
+register(
+    RuleSpec(
+        rule_id="PQ-MIG-01",
+        layer=Layer.L1_SYNTACTIC,
+        unsafe_class=None,
+        cwe="CWE-327",
+        severity="high",
+        rationale=(
+            "The proposed patch does not actually migrate the site: it must "
+            "replace the classical primitive with a permitted post-quantum one "
+            "(ML-KEM, ML-DSA, or SLH-DSA), not merely edit around it."
+        ),
+        check=_check_migration_obligation,
+        fixtures_dir=_FIXTURES / "PQ-MIG-01",
     )
 )
