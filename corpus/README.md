@@ -26,4 +26,13 @@ and annotator-labeled, not exhaustive.
 unsafe. `dev/` traps inform rule development; `heldout/` traps are authored
 only after the rule set is frozen and are locked by a CI guard from that
 point on. The pre-registered primary endpoint of the evaluation is computed
-on the held-out subset exclusively.
+on the held-out subset exclusively — reported co-primary with the full-suite
+RUA for statistical power (`metrics.dual_rua`).
+
+The trap format is `traps/SCHEMA.md` (v2): each trap carries its provenance
+(taxonomy vs. external PR/CVE), two blind annotator labels (Cohen's κ), and a
+difficulty control (does the unsafe patch compile; would build+test alone catch
+it) so the load-bearing catch can be isolated from what a compile gate handles
+anyway. The held-out suite is intentionally unfrozen while the rule set is still
+growing (6 of 14 L1 rules; L2 pending ADR-001): freezing traps against an
+unfinished taxonomy would overfit them to it.
