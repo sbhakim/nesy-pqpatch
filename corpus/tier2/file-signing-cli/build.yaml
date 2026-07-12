@@ -1,0 +1,13 @@
+# Declarative build recipe for L3 (verifier/l3_build.py, project mode).
+#
+# The runner owns the actual javac/java argv; this file only says *what* the
+# project is, never a command to execute. The test suite (RegressionTests)
+# deliberately exercises provider-independent behaviour, so it passes on any
+# JDK and does not depend on a PQC provider being installed -- runtime
+# conformance of the migrated primitive is L4's concern, not L3's.
+project: file-signing-cli
+language: java
+source_dir: src
+test_entrypoint: RegressionTests
+compile_timeout_s: 60
+test_timeout_s: 30
