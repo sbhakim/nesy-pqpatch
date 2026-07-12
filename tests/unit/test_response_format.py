@@ -26,6 +26,40 @@ def test_tolerates_trailing_blank_lines_after_json() -> None:
     assert parsed.claimed_primitive == "X"
 
 
+def test_tolerates_markdown_code_fences_around_diff_and_json() -> None:
+    """Real chat models (verified against a local qwen2.5 run) wrap the diff and
+    JSON in ```diff / ```json fences; the fence markers must not defeat the
+    trailing-JSON scan."""
+    raw = (
+        "```diff\n"
+        "--- a/F.java\n+++ b/F.java\n@@ -1,1 +1,1 @@\n-old\n+new\n"
+        "```\n\n"
+        "```json\n"
+        '{"primitive": "ML-DSA-65", "parameters": "category-3"}\n'
+        "```\n"
+    )
+    parsed = parse_response(raw)
+    assert parsed.claimed_primitive == "ML-DSA-65"
+    assert "+new" in parsed.unified_diff
+    assert "```" not in parsed.unified_diff
+
+
+def test_parses_pretty_printed_and_nested_self_report() -> None:
+    """A real qwen2.5 run emitted a nested, multi-line self-report; the
+    balanced-brace scan must recover it where a single-line scan cannot."""
+    raw = (
+        "--- a/F.java\n+++ b/F.java\n@@ -1,1 +1,1 @@\n-old\n+new\n"
+        "{\n"
+        '  "primitive": "ML-DSA-65",\n'
+        '  "parameters": {"category": 3, "provider": "BC"}\n'
+        "}\n"
+    )
+    parsed = parse_response(raw)
+    assert parsed.claimed_primitive == "ML-DSA-65"
+    assert "+new" in parsed.unified_diff
+    assert '"primitive"' not in parsed.unified_diff
+
+
 def test_missing_json_line_raises() -> None:
     with pytest.raises(MalformedResponseError, match="no trailing JSON"):
         parse_response("just a diff\nwith no json at the end\n")
