@@ -1,7 +1,7 @@
 # ADR-001: L2 dataflow/typestate engine selection
 
-**Status:** accepted; structural frontend adopted for the first bounded vertical slice
-**Date:** 2026-07-11 (opened); 2026-07-12 (decision); 2026-07-13 (frontend revision)
+**Status:** accepted; structural frontend adopted; PQ-KEY-02 feasibility spike passed (U4 flow rule shipped)
+**Date:** 2026-07-11 (opened); 2026-07-12 (decision); 2026-07-13 (frontend revision + PQ-KEY-02 spike)
 
 ## Context
 
@@ -52,15 +52,36 @@ that the bounded facts are sufficient; otherwise the project must add a typed
 frontend/CFG or revise the manuscript scope rather than infer semantics from
 names.
 
+### PQ-KEY-02 feasibility spike (2026-07-13)
+
+The first application of that gate. Question: can the bounded structural facts
+decide U4 key confusion (a key object crossing algorithm families) without a
+Java type resolver? Answer: **yes, for the unambiguous case**, which is shipped
+as `PQ-KEY-02`. Family is anchored on two facts already in reach -- the
+algorithm string literal at a key-producing `getInstance`
+(`KeyPairGenerator`/`KeyGenerator`/`KeyEncapsulation`) and the method name at a
+key-consuming sink (`initSign`/`initVerify` = signature; `doPhase` = agreement).
+An ML-KEM key reaching a signature sink, or an ML-DSA/SLH-DSA key reaching an
+agreement sink, is convicted; simple aliases are followed. The **bounded scope,
+recorded honestly**: a classical/ambiguous literal (`"EC"` is ECDSA *or* ECDH),
+an interprocedural source, or a shadowed redeclaration is *not* convicted -- the
+rule refuses to guess a family rather than risk a false rejection, exactly the
+`PQ-VER-01` philosophy. Resolving those cases would need declared-type/symbol
+resolution; that requirement is now documented rather than approximated, and it
+scopes what a future typed frontend must add for the remaining U4/U5/U6 rules.
+
 ## Consequences
 
 - Verdicts produced under the default configuration now include
   `Layer.L2_DATAFLOW`; configurations that remove L2 remain explicit ablations.
-- The current L2 count is **1 of the planned 22**. No result may describe this
-  vertical slice as the complete L2 rule set.
-- A regression test demonstrates the intended scientific contrast: a patch that
-  discards `verify()`, compiles, and passes the seed project's tests is accepted
-  by L1+L3 but rejected by L2 as `PQ-VER-01`.
+- The current L2 count is **2 of the planned 22** (`PQ-VER-01`, `PQ-KEY-02`). No
+  result may describe this vertical slice as the complete L2 rule set.
+- Two regression tests demonstrate the intended scientific contrast. (a) A patch
+  that discards `verify()`, compiles, and passes the seed project's tests is
+  accepted by L1+L3 but rejected by L2 as `PQ-VER-01`. (b) A migration that puts
+  both algorithm families in scope makes L1's `PQ-KEY-01` *defer*, so L1 accepts,
+  while L1+L2 rejects the ML-KEM-key-into-signature flow as `PQ-KEY-02` -- the
+  L1->L2 escalation boundary, made executable.
 - Runtime dependencies are bounded to `tree-sitter` 0.26.x and
   `tree-sitter-java` 0.23.x in `pyproject.toml`; CI installs them through the
   normal package installation path.
