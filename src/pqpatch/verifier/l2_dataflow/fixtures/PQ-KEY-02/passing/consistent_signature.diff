@@ -1,0 +1,11 @@
+--- a/base.java
++++ b/base.java
+@@ -3,5 +3,5 @@
+ class KeyFixture {
+     byte[] sign(byte[] input) throws Exception {
+-        KeyPair kp = KeyPairGenerator.getInstance("RSA").generateKeyPair();
+-        Signature sig = Signature.getInstance("SHA256withRSA");
++        KeyPair kp = KeyPairGenerator.getInstance("ML-DSA-65").generateKeyPair();
++        Signature sig = Signature.getInstance("ML-DSA-65");
+         sig.initSign(kp.getPrivate());
+         sig.update(input);
