@@ -1,0 +1,5 @@
+--- a/src/FileSigner.java
++++ b/src/FileSigner.java
+@@ -1 +1 @@
+-SecureRandom random = new SecureRandom();
++SecureRandom random = new SecureRandom(new byte[] {1, 2, 3, 4});

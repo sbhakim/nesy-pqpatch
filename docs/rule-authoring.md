@@ -1,6 +1,6 @@
 # How to author a verifier rule
 
-Applies to L1 today; the same shape applies to L2 once ADR-001 is resolved.
+Applies to L1 and to the bounded L2 registry selected by ADR-001.
 
 ## 1. Pick the unsafe class
 

@@ -1,7 +1,7 @@
 # Status: what is real, what is a documented stub
 
 Honest ledger, per the project principle "a documented gap does not outrank an
-honest status page." Last updated 2026-07-12, after the live-model pilot session
+honest status page." Last updated 2026-07-13, after the L2 structural-frontend revision
 (see `../../progress.md` for the narrative overview).
 
 ## Environment
@@ -11,8 +11,8 @@ All commands below were actually run, not assumed:
 
 ```
 ruff check src tests        -> All checks passed!
-mypy                          -> Success: no issues found in 70 source files
-pytest tests/                -> 114 passed
+mypy                          -> Success: no issues found in 82 source files
+pytest tests/                -> 142 passed
 ```
 
 (Earlier in the project this read 64 files / 75 tests, then 67 / 104 after the
@@ -33,10 +33,10 @@ were **not** used — a paid, outward-facing call needs explicit authorization.
 |---|---|---|
 | 0 | Skeleton, pyproject, CI, `model.py` | **Real.** Package installs editable, imports, CLI runs. |
 | 1 | Detector + seed Tier-2 app | **Real.** Semgrep pack (4 rules) + `classify.py` verified against `corpus/tier2/file-signing-cli`: precision 100%, recall 6/6 detectable (= 6/7 seeded; the 7th is deliberately undetectable by design). |
-| 2 | Rule metadata + fixtures + L1 rules | **Real, reduced count.** **7** L1 rules (`PQ-PARAM-01`, `PQ-FALL-01`, `PQ-FALL-02`, `PQ-RAND-01`, `PQ-HYB-01`, `PQ-SCOPE-01`, and the new **`PQ-MIG-01`** migration-obligation rule) with fixtures, all passing. Manuscript Table 3 commits to 14 L1 rules; the gap is the remaining 7 (more U1/U4/U7 coverage), not a change in kind. |
+| 2 | Rule metadata + fixtures + L1 rules | **Real, reduced count.** **9** L1 rules with fixtures, including `PQ-KEY-01` (unambiguous primitive-family mismatch) and `PQ-RAND-02` (literal-seeded `SecureRandom`). Manuscript Table 3 commits to 14 L1 rules; ambiguous flow remains assigned to L2 rather than guessed at L1. |
 | 3 | Proposer, cache, repair loop | **Real, now exercised on live models.** `Backend` ABC, content-addressed `CacheStore`, `ReplayBackend` test double, `loop.py` implementing Algorithm 1. `backend_c` (local OpenAI-compatible) was driven end-to-end against **Ollama** for the first time — real proposals, cached and reproducible. `backend_a`/`backend_b` (hosted) remain unexercised pending authorization to spend. |
-| Verifier orchestrator | Eq. (1) short-circuit composition | **Real.** `verify_patch()` runs L1 then L3 (L2/L4 explicitly excluded via `DEFAULT_ENABLED_LAYERS`, not silently skipped -- every `Verdict.layers_evaluated` records the truth). |
-| L2 (dataflow/typestate) | 22 rules per manuscript Table 3 | **Not implemented.** Real interface, `NotImplementedError`, ADR-001 open. This is the project's critical path (see `../../progress.md`). |
+| Verifier orchestrator | Eq. (1) short-circuit composition | **Real.** `verify_patch()` runs L1, the implemented L2 registry, then L3 by default; L4 remains explicitly excluded, and every `Verdict.layers_evaluated` records the truth. |
+| L2 (dataflow/typestate) | 22 rules per manuscript Table 3 | **Real vertical slice: 1/22.** ADR-001 now uses a Tree-sitter Java structural frontend with a bounded intraprocedural def-use analysis. `PQ-VER-01` rejects discarded/dead or overwritten `verify()` results while accepting branch use, ordered simple aliases, and explicit return propagation. Parse errors and unsupported or scope-ambiguous cases fail closed. A regression test proves L1+L3 accepts a compiling unsafe patch that L2 rejects. This is not the complete promised L2 set. |
 | L3 (build) | Containerized Maven/Gradle + project tests | **Real project build + tests (U-A / ADR-004).** When a `build.yaml` sits above the site, L3 copies the tree, applies the patch (via a content-anchored diff applier that tolerates the wrong line numbers / whitespace real models emit, while refusing to force-apply an ambiguous or unmatched hunk), compiles *all* sources, and runs the project's own test entrypoint; single-file `javac` remains a labelled fallback. Still deferred: third-party dependency resolution and JDK 24 PQC *runtime* (L4's job). Supersedes ADR-002 in part. |
 | L4 (conformance) | Round-trip + ACVP KATs + tri-stack interop | **Not implemented.** Real interfaces in `roundtrip.py`/`acvp.py`/`interop.py`, all raise `NotImplementedError`. Requires `containers/crypto-tools` and pinned ACVP vectors, neither built this session. |
 | Trace + metrics | Canonical hashing, attestation, RUA/Wilson/McNemar | **Real.** Golden-bytes-tested canonical JSON, working tamper detection (a mutated field is correctly detected), optional ML-DSA signing behind a guarded import (`liboqs-python` not installed; raises a clear error, not a silent no-op). Every metric verified against hand-computed reference values, not just round-trip tests. |
@@ -117,8 +117,8 @@ gap. No paper-scale numbers exist; the manuscript's `XX.X%` remain placeholders.
 
 ## What a future session should do first
 
-1. Run ADR-001's spike (CogniCrypt vs. CodeQL vs. Soufflé) and close it — L2 is
-   the critical path for the paper's central claim.
+1. Expand ADR-001's structural L2 slice beyond `PQ-VER-01`, first proving that
+   the next rule does not require type resolution or path-sensitive control flow.
 2. Grow the L1 rule set from 7 to the manuscript's committed 14 (or edit the
    committed count in the same commit if it changes).
 3. Add the remaining five Tier-2 reference applications — each with a

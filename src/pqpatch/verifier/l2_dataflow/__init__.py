@@ -1,19 +1,12 @@
-"""L2: dataflow and typestate rules.
-
-Not yet implemented; the engine choice is an open architecture decision
-(ADR-001) and blocks rule authoring. The orchestrator records this layer
-as skipped rather than passed, so its absence is visible in every verdict.
-"""
+"""L2: bounded intraprocedural Java dataflow rules (ADR-001)."""
 
 from __future__ import annotations
 
 from pqpatch.model import Patch, Policy, Site
+from pqpatch.verifier.l2_dataflow.rules import _check_verify_result
 from pqpatch.verifier.rules.spec import RuleOutcome
 
 
 def check(patch: Patch, site: Site, policy: Policy) -> RuleOutcome:
-    del patch, site, policy
-    raise NotImplementedError(
-        "L2 dataflow verification pends the engine decision in ADR-001; "
-        "see docs/STATUS.md for the implementation ledger."
-    )
+    """Compatibility entrypoint; the orchestrator uses the rule registry."""
+    return _check_verify_result(patch, site, policy)

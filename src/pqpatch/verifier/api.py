@@ -24,13 +24,15 @@ from pqpatch.model import (
     VerdictStatus,
 )
 from pqpatch.verifier import l3_build
-from pqpatch.verifier.l2_dataflow import check as l2_check
 from pqpatch.verifier.l4_conformance import check as l4_check
 from pqpatch.verifier.rules.registry import rules_by_layer
 from pqpatch.verifier.rules.spec import RuleOutcome
 
-# L2 and L4 join this set when their implementations land (ADR-001, ADR-002).
-DEFAULT_ENABLED_LAYERS: frozenset[Layer] = frozenset({Layer.L1_SYNTACTIC, Layer.L3_BUILD})
+# L4 joins this set when its implementation lands. L2 contains the first
+# production rule (PQ-VER-01); verdict provenance still records the exact set.
+DEFAULT_ENABLED_LAYERS: frozenset[Layer] = frozenset(
+    {Layer.L1_SYNTACTIC, Layer.L2_DATAFLOW, Layer.L3_BUILD}
+)
 
 _LAYER_ORDER: tuple[Layer, ...] = (
     Layer.L1_SYNTACTIC,
@@ -43,7 +45,7 @@ _LAYER_ORDER: tuple[Layer, ...] = (
 def _run_rule_registry_layer(
     layer: Layer, patch: Patch, site: Site, policy: Policy
 ) -> LayerReport:
-    """L1's real implementation: run every registered rule for this layer."""
+    """Run every registered rule for an implemented rule layer (L1 or L2)."""
     results: list[RuleResult] = []
     start = time.perf_counter()
     for spec in rules_by_layer(layer):
@@ -105,9 +107,7 @@ def _run_layer(layer: Layer, patch: Patch, site: Site, policy: Policy) -> LayerR
     if layer == Layer.L1_SYNTACTIC:
         return _run_rule_registry_layer(layer, patch, site, policy)
     if layer == Layer.L2_DATAFLOW:
-        return _run_single_check_layer(
-            layer, l2_check, patch, site, policy, rule_id="<L2-dataflow>"
-        )
+        return _run_rule_registry_layer(layer, patch, site, policy)
     if layer == Layer.L3_BUILD:
         return _run_single_check_layer(
             layer, l3_build.check, patch, site, policy, rule_id="<L3-build>"

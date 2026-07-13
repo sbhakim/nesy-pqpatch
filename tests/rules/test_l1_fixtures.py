@@ -9,11 +9,12 @@ fails CI -- this is the mechanism, not a promise in a docstring.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from pqpatch.model import Patch, Policy, RuleStatus, Site, UsageClass
+from pqpatch.model import Layer, Patch, Policy, RuleStatus, Site, UsageClass
 from pqpatch.verifier.rules.registry import all_rules
 
 _DEFAULT_SITE = Site(
@@ -68,7 +69,14 @@ def test_rule_fixture_outcome(rule_id: str, fixture_path: Path, expected: RuleSt
 
     spec = get(rule_id)
     patch = _patch_from_fixture(fixture_path)
-    outcome = spec.check(patch, _DEFAULT_SITE, _DEFAULT_POLICY)
+    site = _DEFAULT_SITE
+    if spec.layer is Layer.L2_DATAFLOW:
+        site = replace(
+            site,
+            file_path=str(spec.fixtures_dir / "base.java"),
+            usage_class=UsageClass.VERIFY,
+        )
+    outcome = spec.check(patch, site, _DEFAULT_POLICY)
     assert outcome.status == expected, (
         f"{rule_id} on {fixture_path.name}: expected {expected}, "
         f"got {outcome.status} ({outcome.detail})"

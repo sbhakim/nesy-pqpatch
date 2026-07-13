@@ -11,6 +11,7 @@ from pqpatch.model import Layer
 from pqpatch.verifier.rules.spec import RuleSpec
 
 _REGISTRY: dict[str, RuleSpec] = {}
+_LOADED = False
 
 
 def register(spec: RuleSpec) -> RuleSpec:
@@ -22,13 +23,18 @@ def register(spec: RuleSpec) -> RuleSpec:
 
 def load_all() -> None:
     """Import every rule module so its rules register. Idempotent."""
+    global _LOADED
+    if _LOADED:
+        return
     from pqpatch.verifier.l1_syntactic import rules as _l1  # noqa: F401
+    from pqpatch.verifier.l2_dataflow import rules as _l2  # noqa: F401
 
-    del _l1
+    del _l1, _l2
+    _LOADED = True
 
 
 def all_rules() -> list[RuleSpec]:
-    if not _REGISTRY:
+    if not _LOADED:
         load_all()
     return list(_REGISTRY.values())
 
@@ -38,6 +44,6 @@ def rules_by_layer(layer: Layer) -> list[RuleSpec]:
 
 
 def get(rule_id: str) -> RuleSpec:
-    if not _REGISTRY:
+    if not _LOADED:
         load_all()
     return _REGISTRY[rule_id]

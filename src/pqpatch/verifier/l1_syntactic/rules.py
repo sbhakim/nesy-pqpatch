@@ -2,7 +2,7 @@
 
 Everything decidable from the patch's added lines alone: parameter floors,
 fallback shapes, randomness sources, hybrid presence, and diff scope.
-Properties that require dataflow belong to L2. Six of the planned fourteen
+Properties that require dataflow belong to L2. Nine of the planned fourteen
 rules are implemented; docs/STATUS.md tracks the remainder.
 """
 
@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from pqpatch.model import Layer, Patch, Policy, RuleStatus, Site, UnsafeClass
+from pqpatch.model import Layer, Patch, Policy, RuleStatus, Site, UnsafeClass, UsageClass
 from pqpatch.verifier.rules.diffutil import (
     added_lines,
     path_in_scope,
@@ -75,6 +75,59 @@ register(
         ),
         check=_check_param_weakening,
         fixtures_dir=_FIXTURES / "PQ-PARAM-01",
+    )
+)
+
+# --- PQ-KEY-01: U4 primitive-family mismatch -------------------------------
+#
+# This is intentionally narrower than key-confusion dataflow analysis, which
+# belongs to L2.  L1 can still reject the unambiguous surface case where a KEM
+# site introduces only a signature primitive, or a signature site introduces
+# only a KEM primitive.  If both families occur, the patch may be implementing
+# a legitimate composed protocol and this rule defers rather than guessing.
+
+_KEM_PRIMITIVE_RE = re.compile(r"ML-(?:KEM)(?:-\d{3,4})?|MLKEM(?:\d{3,4})?")
+_SIGNATURE_PRIMITIVE_RE = re.compile(
+    r"ML-(?:DSA)(?:-\d{2})?|MLDSA(?:\d{2})?|SLH-(?:DSA)|SLHDSA"
+)
+
+
+def _check_primitive_family(patch: Patch, site: Site, policy: Policy) -> RuleOutcome:
+    del policy
+    joined = "\n".join(added_lines(patch.unified_diff))
+    has_kem = bool(_KEM_PRIMITIVE_RE.search(joined))
+    has_signature = bool(_SIGNATURE_PRIMITIVE_RE.search(joined))
+
+    if site.usage_class in {UsageClass.KEM, UsageClass.ENVELOPE} and has_signature and not has_kem:
+        return RuleOutcome(
+            RuleStatus.FAIL,
+            detail="key-establishment site introduces only a signature primitive; "
+            "ML-KEM is required for KEM/envelope usage",
+        )
+    if site.usage_class in {UsageClass.SIGN, UsageClass.VERIFY} and has_kem and not has_signature:
+        return RuleOutcome(
+            RuleStatus.FAIL,
+            detail="signature site introduces only a key-establishment primitive; "
+            "ML-DSA or SLH-DSA is required for sign/verify usage",
+        )
+    return _PASS
+
+
+register(
+    RuleSpec(
+        rule_id="PQ-KEY-01",
+        layer=Layer.L1_SYNTACTIC,
+        unsafe_class=UnsafeClass.U4_KEY_CONFUSION,
+        cwe="CWE-327",
+        severity="high",
+        rationale=(
+            "The proposed patch uses a post-quantum primitive from the wrong "
+            "algorithm family for this site: ML-KEM is for key establishment, "
+            "while ML-DSA and SLH-DSA are for signatures. Re-propose using the "
+            "family required by the detected usage class."
+        ),
+        check=_check_primitive_family,
+        fixtures_dir=_FIXTURES / "PQ-KEY-01",
     )
 )
 
@@ -195,6 +248,53 @@ register(
         ),
         check=_check_randomness,
         fixtures_dir=_FIXTURES / "PQ-RAND-01",
+    )
+)
+
+# --- PQ-RAND-02: U5 literal SecureRandom seed -------------------------------
+#
+# Only self-contained literal seeds are rejected here.  A setSeed(...) call is
+# not enough evidence at L1: whether it is the sole source of entropy depends on
+# object construction and call order, so that case is deliberately left to L2.
+
+_LITERAL_SECURE_RANDOM_SEED_RE = re.compile(
+    r"new\s+SecureRandom\s*\(\s*(?:"
+    r"new\s+byte\s*\[\s*\]\s*\{|"
+    r'"(?:[^"\\]|\\.)*"\s*\.\s*getBytes\s*\('
+    r")",
+    re.DOTALL,
+)
+
+
+def _check_literal_secure_random_seed(
+    patch: Patch, site: Site, policy: Policy
+) -> RuleOutcome:
+    del site, policy
+    joined = "\n".join(added_lines(patch.unified_diff))
+    if _LITERAL_SECURE_RANDOM_SEED_RE.search(joined):
+        return RuleOutcome(
+            RuleStatus.FAIL,
+            detail="SecureRandom is constructed from a fixed literal seed; "
+            "key generation must obtain entropy from the platform source",
+        )
+    return _PASS
+
+
+register(
+    RuleSpec(
+        rule_id="PQ-RAND-02",
+        layer=Layer.L1_SYNTACTIC,
+        unsafe_class=UnsafeClass.U5_RANDOMNESS_MISUSE,
+        cwe="CWE-337",
+        severity="high",
+        rationale=(
+            "The proposed patch constructs SecureRandom from a fixed literal "
+            "seed, making generated cryptographic material reproducible. "
+            "Re-propose using a platform-seeded SecureRandom without literal "
+            "seed material."
+        ),
+        check=_check_literal_secure_random_seed,
+        fixtures_dir=_FIXTURES / "PQ-RAND-02",
     )
 )
 

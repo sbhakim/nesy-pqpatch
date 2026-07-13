@@ -1,0 +1,5 @@
+--- a/src/FileSigner.java
++++ b/src/FileSigner.java
+@@ -1 +1 @@
+-KeyAgreement agreement = KeyAgreement.getInstance("ECDH");
++KeyEncapsulation kem = KeyEncapsulation.getInstance("ML-KEM-768");

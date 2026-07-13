@@ -1,10 +1,7 @@
 # ADR-001: L2 dataflow/typestate engine selection
 
-**Status:** proposed, NOT yet decided
-**Date:** 2026-07-11 (opened); decision deadline per codebase-plan.md §5 Phase 2
-exit criterion is end of week 2 of implementation -- this session did not reach
-that point in wall-clock development time, so the ADR remains open rather than
-being force-closed with an unverified choice.
+**Status:** accepted; structural frontend adopted for the first bounded vertical slice
+**Date:** 2026-07-11 (opened); 2026-07-12 (decision); 2026-07-13 (frontend revision)
 
 ## Context
 
@@ -23,38 +20,57 @@ ingest custom PQC rules; if it does not work cleanly by the deadline, fall
 back to CodeQL taint/typestate queries or a Soufflé/Datalog implementation
 over tree-sitter-extracted facts, and never revisit the choice afterward.
 
-This session did not run that spike. Building it honestly (actually
-installing CogniCrypt, actually authoring a trial PQC rule, actually
-measuring whether it ingests cleanly) is real, multi-hour infrastructure
-work that was out of scope for the vertical-slice build completed here
-(Phases 0-3: skeleton, detector, L1 rules, proposer/cache/loop, verifier
-orchestrator, trace, metrics -- see docs/STATUS.md).
+The environment contains neither CodeQL nor Soufflé, and introducing either
+before establishing the first load-bearing rule would add installation,
+licensing, and fact-extraction risk. CogniCrypt likewise remains an
+infrastructure spike rather than an available dependency. The first rule is
+small enough to test the required semantics without committing the artifact to
+one of those external runtimes.
 
 ## Decision
 
-**Not made.** `verifier/l2_dataflow/__init__.py` exists with the real,
-documented interface (`check(patch, site, policy) -> RuleOutcome`) the
-future implementation must satisfy, and raises `NotImplementedError` with a
-message pointing back to this ADR. The verifier orchestrator
-(`verifier/api.py`) treats L2 as an explicitly excluded layer
-(`DEFAULT_ENABLED_LAYERS = {L1_SYNTACTIC, L3_BUILD}`) rather than silently
-passing it, and every `Verdict` records `layers_evaluated` so no result can
-be mistaken for a full four-layer verification.
+Use a purpose-built, intraprocedural Java fact/def-use slice for the initial L2
+rules, beginning with `PQ-VER-01`, with Tree-sitter Java as its structural
+frontend. The engine applies the candidate diff to the real source file and
+extracts invocation, assignment, branch, and return facts from the syntax tree.
+It recognizes direct branch/return use, local boolean assignment, ordered simple
+aliases, and intervening overwrites. Parse errors, unsupported expression shapes,
+lambda boundaries, and ambiguous same-name redeclarations are indeterminate
+rather than silently accepted. Nested method and class facts are kept out of the
+containing method. This is not presented as a general Java type resolver,
+control-flow graph, or interprocedural analysis.
+
+`PQ-VER-01` accepts verification results that reach a local branch or are
+explicitly returned to the caller, and rejects discarded/dead results. L2 now
+runs through the same registered-rule machinery as L1 and is enabled by default;
+each verdict records that it ran and attributes rejection to the concrete rule.
+
+The structural frontend removes the immediate regex/parsing risk but does not
+provide symbol resolution or path-sensitive control flow. Before implementing
+key-family, randomness-provenance, or hybrid-secret rules, each rule must prove
+that the bounded facts are sufficient; otherwise the project must add a typed
+frontend/CFG or revise the manuscript scope rather than infer semantics from
+names.
 
 ## Consequences
 
-- Every Verdict/Trace produced by this session's code is honestly partial:
-  `layers_evaluated` never contains `Layer.L2_DATAFLOW`.
-- `eval/metrics.py`'s `catch_rate_by_layer` will correctly show zero L2
-  catches until this ADR is resolved and rules exist -- that is accurate,
-  not a bug to paper over.
+- Verdicts produced under the default configuration now include
+  `Layer.L2_DATAFLOW`; configurations that remove L2 remain explicit ablations.
+- The current L2 count is **1 of the planned 22**. No result may describe this
+  vertical slice as the complete L2 rule set.
+- A regression test demonstrates the intended scientific contrast: a patch that
+  discards `verify()`, compiles, and passes the seed project's tests is accepted
+  by L1+L3 but rejected by L2 as `PQ-VER-01`.
+- Runtime dependencies are bounded to `tree-sitter` 0.26.x and
+  `tree-sitter-java` 0.23.x in `pyproject.toml`; CI installs them through the
+  normal package installation path.
 - The de-scoping valve from codebase-plan.md §13 remains available: if,
   once this spike runs, CodeQL/Soufflé prove slower to rule-author than
   planned, ship fewer than 22 rules and update the manuscript's committed
   count in the same commit, rather than let the rule count silently drift
   out of sync with what Table 3 claims.
 
-## Alternatives considered (to be evaluated when the spike runs)
+## Alternatives considered
 
 1. **CogniCrypt/CrySL.** Native fit for the rule *style* the manuscript
    describes ("CrySL-style rules"), but academic-maintenance risk is real;

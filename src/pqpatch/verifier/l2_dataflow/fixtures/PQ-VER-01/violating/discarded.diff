@@ -1,0 +1,10 @@
+--- a/base.java
++++ b/base.java
+@@ -3,5 +3,6 @@
+ class VerifyFixture {
+     boolean verify(Signature signature, byte[] input) throws Exception {
+-        return false;
++        signature.verify(input);
++        return true;
+     }
+ }
