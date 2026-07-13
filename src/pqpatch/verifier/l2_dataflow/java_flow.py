@@ -405,3 +405,110 @@ def classify_key_flow(source: str) -> KeyFlow:
             if _analyze_key_flow(source_bytes, node) is KeyFlow.CROSS_FAMILY:
                 return KeyFlow.CROSS_FAMILY
     return KeyFlow.CONSISTENT
+
+
+# --- PQ-HYB-02: hybrid completeness ----------------------------------------
+#
+# L1's PQ-HYB-01 checks, at the token level, that both a classical KEX and an
+# ML-KEM primitive appear. This L2 rule goes past tokens to the flow: in a
+# structurally hybrid context -- one method that produces both a classical shared
+# secret (`KeyAgreement.generateSecret`) and a PQ shared secret (KEM
+# `decapsulate`) -- both secrets must reach a common combiner (the KDF), or one
+# component has been silently dropped. "Reaches a common combiner" is detected
+# structurally as a single expression whose arguments name a classical-tainted
+# and a PQ-tainted variable (through simple aliases). If both secrets are produced
+# but no expression combines them, the hybrid is downgraded. A method that
+# produces only one family is not a hybrid context here (that missing-token case
+# is PQ-HYB-01's job at L1). Parse errors are indeterminate.
+
+
+class HybridFlow(enum.StrEnum):
+    COMPLETE = "complete"
+    DOWNGRADED = "downgraded"
+    NOT_HYBRID = "not_hybrid"
+    INDETERMINATE = "indeterminate"
+
+
+_CLASSICAL_SECRET_METHODS = frozenset({"generateSecret"})
+_PQ_SECRET_METHODS = frozenset({"decapsulate"})
+
+
+def _rhs_calls_any(source: bytes, rhs: Node | None, names: frozenset[str]) -> bool:
+    if rhs is None:
+        return False
+    for node in _walk(rhs):
+        if node.type != "method_invocation":
+            continue
+        if _text(source, node.child_by_field_name("name")) in names:
+            return True
+    return False
+
+
+def _assignments_in_order(source: bytes, method: Node) -> list[tuple[str, Node | None]]:
+    steps: list[tuple[int, str, Node | None]] = []
+    for node in _walk_method(method):
+        if node.type == "variable_declarator":
+            steps.append(
+                (node.start_byte, _text(source, node.child_by_field_name("name")),
+                 node.child_by_field_name("value"))
+            )
+        elif node.type == "assignment_expression":
+            left = node.child_by_field_name("left")
+            if left is not None and left.type == "identifier":
+                steps.append(
+                    (node.start_byte, _text(source, left), node.child_by_field_name("right"))
+                )
+    return [(left, rhs) for _, left, rhs in sorted(steps, key=lambda s: s[0])]
+
+
+def _analyze_hybrid(source: bytes, method: Node) -> HybridFlow:
+    classical: set[str] = set()
+    pq: set[str] = set()
+    for left, rhs in _assignments_in_order(source, method):
+        if _rhs_calls_any(source, rhs, _CLASSICAL_SECRET_METHODS):
+            classical.add(left)
+            pq.discard(left)
+        elif _rhs_calls_any(source, rhs, _PQ_SECRET_METHODS):
+            pq.add(left)
+            classical.discard(left)
+        else:
+            ids = _identifier_names(source, rhs)
+            in_c, in_p = bool(ids & classical), bool(ids & pq)
+            classical.discard(left)
+            pq.discard(left)
+            # a pure alias inherits its single family; a var built from both is a
+            # combiner value, left untainted (the combiner scan sees the expression).
+            if in_c and not in_p:
+                classical.add(left)
+            elif in_p and not in_c:
+                pq.add(left)
+
+    if not (classical and pq):
+        return HybridFlow.NOT_HYBRID
+
+    for node in _walk_method(method):
+        if node.type not in {"method_invocation", "object_creation_expression"}:
+            continue
+        args = node.child_by_field_name("arguments")
+        ids = _identifier_names(source, args if args is not None else node)
+        if ids & classical and ids & pq:
+            return HybridFlow.COMPLETE
+    return HybridFlow.DOWNGRADED
+
+
+def classify_hybrid_flow(source: str) -> HybridFlow:
+    """Classify hybrid-secret completeness across every structurally parsed method."""
+    source_bytes = source.encode("utf-8")
+    tree = Parser(_LANGUAGE).parse(source_bytes)
+    if tree.root_node.has_error:
+        return HybridFlow.INDETERMINATE
+
+    result = HybridFlow.NOT_HYBRID
+    for node in _walk(tree.root_node):
+        if node.type in {"method_declaration", "constructor_declaration"}:
+            outcome = _analyze_hybrid(source_bytes, node)
+            if outcome is HybridFlow.DOWNGRADED:
+                return HybridFlow.DOWNGRADED
+            if outcome is HybridFlow.COMPLETE:
+                result = HybridFlow.COMPLETE
+    return result

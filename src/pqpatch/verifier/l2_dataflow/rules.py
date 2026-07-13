@@ -6,8 +6,10 @@ from pathlib import Path
 
 from pqpatch.model import Layer, Patch, Policy, RuleStatus, Site, UnsafeClass, UsageClass
 from pqpatch.verifier.l2_dataflow.java_flow import (
+    HybridFlow,
     KeyFlow,
     VerifyUse,
+    classify_hybrid_flow,
     classify_key_flow,
     classify_verify_uses,
 )
@@ -111,5 +113,49 @@ register(
         ),
         check=_check_key_confusion,
         fixtures_dir=_FIXTURES / "PQ-KEY-02",
+    )
+)
+
+
+def _check_hybrid_completeness(patch: Patch, site: Site, policy: Policy) -> RuleOutcome:
+    # Hybrid completeness is a source-internal flow property; it engages only
+    # when both secret families are produced, so it does not gate on usage_class.
+    del policy
+    try:
+        patched = _patched_source(patch, site)
+    except (FileNotFoundError, DiffApplyError) as exc:
+        return RuleOutcome(RuleStatus.ERROR, detail=f"cannot analyze patched source: {exc}")
+
+    flow = classify_hybrid_flow(patched)
+    if flow is HybridFlow.DOWNGRADED:
+        return RuleOutcome(
+            RuleStatus.FAIL,
+            detail="hybrid context produces both a classical and a post-quantum "
+            "shared secret, but only one reaches the key-derivation combiner "
+            "(hybrid downgrade)",
+        )
+    if flow is HybridFlow.INDETERMINATE:
+        return RuleOutcome(
+            RuleStatus.ERROR,
+            detail="patched source did not parse; L2 cannot prove hybrid completeness",
+        )
+    return _PASS
+
+
+register(
+    RuleSpec(
+        rule_id="PQ-HYB-02",
+        layer=Layer.L2_DATAFLOW,
+        unsafe_class=UnsafeClass.U6_HYBRID_DOWNGRADE,
+        cwe="CWE-327",
+        severity="high",
+        rationale=(
+            "A mandated hybrid must combine both shared secrets: the classical "
+            "(e.g. ECDHE) and the ML-KEM contribution must both reach the key "
+            "derivation. This patch drops one component before the KDF. "
+            "Re-propose so both secrets are combined into the derived key."
+        ),
+        check=_check_hybrid_completeness,
+        fixtures_dir=_FIXTURES / "PQ-HYB-02",
     )
 )

@@ -1,0 +1,8 @@
+--- a/base.java
++++ b/base.java
+@@ -6,3 +6,4 @@
+         byte[] ecSecret = ka.generateSecret();
+-        byte[] combined = ecSecret;
++        byte[] pqSecret = dec.decapsulate(ct);
++        byte[] combined = concat(ecSecret, pqSecret);
+         return hkdf(combined);
