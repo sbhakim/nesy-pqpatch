@@ -1,0 +1,5 @@
+--- a/src/FileSigner.java
++++ b/src/FileSigner.java
+@@ -1 +1 @@
+-Signature old = Signature.getInstance("SHA256withRSA");
++Signature sig = Signature.getInstance("SLH-DSA-SHA2-128s");

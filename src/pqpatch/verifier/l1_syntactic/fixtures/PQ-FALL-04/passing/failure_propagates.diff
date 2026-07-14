@@ -1,0 +1,10 @@
+--- a/src/FileSigner.java
++++ b/src/FileSigner.java
+@@ -1 +1,6 @@
+-Signature old = Signature.getInstance("SHA256withRSA");
++Signature sig = Signature.getInstance("ML-DSA-65");
++try {
++    sig.initSign(key);
++} catch (InvalidKeyException e) {
++    throw new IllegalStateException("migration failure must propagate", e);
++}

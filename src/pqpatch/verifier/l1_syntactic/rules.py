@@ -1,9 +1,11 @@
 """L1 syntactic rules.
 
-Everything decidable from the patch's added lines alone: parameter floors,
-fallback shapes, randomness sources, hybrid presence, and diff scope.
-Properties that require dataflow belong to L2. Nine of the planned fourteen
-rules are implemented; docs/STATUS.md tracks the remainder.
+Everything decidable from the patch's added lines alone: parameter floors and
+validity, fallback shapes, exception discipline, randomness sources, hybrid
+presence, diff scope, and the migration obligation. Properties that require
+dataflow belong to L2. All fourteen class-mapped rules plus the two
+cross-cutting ones (scope, obligation) are implemented; docs/STATUS.md is the
+ledger.
 """
 
 from __future__ import annotations
@@ -418,5 +420,306 @@ register(
         ),
         check=_check_migration_obligation,
         fixtures_dir=_FIXTURES / "PQ-MIG-01",
+    )
+)
+
+# --- PQ-PARAM-03: U1 SLH-DSA parameter floor ---------------------------------
+#
+# PQ-PARAM-01 ranks only the ML-KEM/ML-DSA token grammar; SLH-DSA (FIPS 205)
+# has its own ("SLH-DSA-SHA2-128s") and needs its own floor check.
+
+
+def _check_slh_param_floor(patch: Patch, site: Site, policy: Policy) -> RuleOutcome:
+    floor = policy.floors.get(site.usage_class)
+    if floor is None:
+        return _PASS
+    floor_rank = ranks.floor_rank(floor)
+    if floor_rank is None:
+        return _PASS
+
+    for line in added_lines(patch.unified_diff):
+        for match in ranks.SLH_TOKEN_RE.finditer(line):
+            token_rank = ranks.SLH_CATEGORY_RANK.get(match.group(1))
+            if token_rank is not None and token_rank < floor_rank:
+                return RuleOutcome(
+                    RuleStatus.FAIL,
+                    detail=f"SLH-DSA parameter set {match.group(0)!r} (category rank "
+                    f"{token_rank}) is below the policy floor {floor} "
+                    f"(category rank {floor_rank})",
+                )
+    return _PASS
+
+
+register(
+    RuleSpec(
+        rule_id="PQ-PARAM-03",
+        layer=Layer.L1_SYNTACTIC,
+        unsafe_class=UnsafeClass.U1_PARAM_WEAKENING,
+        cwe="CWE-326",
+        severity="high",
+        rationale=(
+            "The proposed patch selects an SLH-DSA parameter set below the "
+            "security category required by the migration policy. Re-propose "
+            "using an SLH-DSA parameter set that meets or exceeds the floor."
+        ),
+        check=_check_slh_param_floor,
+        fixtures_dir=_FIXTURES / "PQ-PARAM-03",
+    )
+)
+
+# --- PQ-PARAM-04: U1 nonstandard PQ parameter set ----------------------------
+#
+# Models hallucinate parameter sets ("ML-KEM-256", "ML-DSA-128") that the
+# standards do not define. PQ-PARAM-01 ranks only known tokens, so an unknown
+# set slips past the floor check entirely; here it is rejected as invalid
+# rather than merely unranked.
+
+_MLKEM_SET_RE = re.compile(r"ML-KEM-(\d{2,4})")
+_MLDSA_SET_RE = re.compile(r"ML-DSA-(\d{2,4})")
+_SLH_SET_RE = re.compile(r"SLH-DSA-(?:SHA2|SHAKE)-(\d{2,4})")
+
+
+def _check_nonstandard_param(patch: Patch, site: Site, policy: Policy) -> RuleOutcome:
+    del site, policy
+    for line in added_lines(patch.unified_diff):
+        for pattern, valid, family in (
+            (_MLKEM_SET_RE, ranks.VALID_MLKEM_SETS, "ML-KEM"),
+            (_MLDSA_SET_RE, ranks.VALID_MLDSA_SETS, "ML-DSA"),
+            (_SLH_SET_RE, ranks.VALID_SLH_SETS, "SLH-DSA"),
+        ):
+            for match in pattern.finditer(line):
+                if match.group(1) not in valid:
+                    return RuleOutcome(
+                        RuleStatus.FAIL,
+                        detail=f"{match.group(0)!r} is not a parameter set the {family} "
+                        f"standard defines; the token is invalid, not merely weak",
+                    )
+    return _PASS
+
+
+register(
+    RuleSpec(
+        rule_id="PQ-PARAM-04",
+        layer=Layer.L1_SYNTACTIC,
+        unsafe_class=UnsafeClass.U1_PARAM_WEAKENING,
+        cwe="CWE-327",
+        severity="high",
+        rationale=(
+            "The proposed patch names a post-quantum parameter set that the "
+            "FIPS standards do not define. Re-propose using a defined parameter "
+            "set (ML-KEM-512/768/1024, ML-DSA-44/65/87, or SLH-DSA at category "
+            "128/192/256)."
+        ),
+        check=_check_nonstandard_param,
+        fixtures_dir=_FIXTURES / "PQ-PARAM-04",
+    )
+)
+
+# --- PQ-PARAM-05: U1 classical key-size downgrade ----------------------------
+#
+# A migration patch that also *weakens the classical side* (e.g. re-keys the
+# hybrid's RSA/DH component at 1024 bits) is a parameter downgrade even though
+# no PQ token is involved. Only unambiguous sub-2048 modulus sizes are
+# convicted; EC named-curve sizes (256/384/521) are not in the set.
+
+_WEAK_KEYSIZE_RE = re.compile(r"\.initialize\s*\(\s*(512|768|1024)\s*[,)]")
+
+
+def _check_classical_keysize_downgrade(patch: Patch, site: Site, policy: Policy) -> RuleOutcome:
+    del site, policy
+    for line in added_lines(patch.unified_diff):
+        match = _WEAK_KEYSIZE_RE.search(line)
+        if match:
+            return RuleOutcome(
+                RuleStatus.FAIL,
+                detail=f"added code initializes key generation at {match.group(1)} bits, "
+                f"below any accepted classical margin for a migration-era hybrid",
+            )
+    return _PASS
+
+
+register(
+    RuleSpec(
+        rule_id="PQ-PARAM-05",
+        layer=Layer.L1_SYNTACTIC,
+        unsafe_class=UnsafeClass.U1_PARAM_WEAKENING,
+        cwe="CWE-326",
+        severity="medium",
+        rationale=(
+            "The proposed patch initializes classical key generation below "
+            "2048 bits. A migration must not weaken the classical component it "
+            "retains; re-propose keeping classical parameters at or above "
+            "current accepted margins."
+        ),
+        check=_check_classical_keysize_downgrade,
+        fixtures_dir=_FIXTURES / "PQ-PARAM-05",
+    )
+)
+
+# --- PQ-FALL-03: U2 runtime classical/PQ toggle ------------------------------
+#
+# PQ-FALL-01 needs a catch to fire. A conditional that selects between a PQ and
+# a classical algorithm string at runtime is the same downgrade path without an
+# exception handler: the classical branch stays reachable by flag.
+
+_TERNARY_LITERALS_RE = re.compile(r'\?\s*"([^"]+)"\s*:\s*"([^"]+)"')
+_PQ_TOKEN_ANY_RE = re.compile(r"ML-KEM|ML-DSA|SLH-DSA")
+_CLASSICAL_LITERAL_RE = re.compile(r"RSA|(?<!ML-)ECDSA|(?<!ML-)(?<!SLH-)DSA|ECDH|DiffieHellman")
+
+
+def _check_runtime_toggle(patch: Patch, site: Site, policy: Policy) -> RuleOutcome:
+    del site, policy
+    for line in added_lines(patch.unified_diff):
+        for match in _TERNARY_LITERALS_RE.finditer(line):
+            literals = (match.group(1), match.group(2))
+            has_pq = any(_PQ_TOKEN_ANY_RE.search(lit) for lit in literals)
+            has_classical = any(_CLASSICAL_LITERAL_RE.search(lit) for lit in literals)
+            if has_pq and has_classical:
+                return RuleOutcome(
+                    RuleStatus.FAIL,
+                    detail="added code selects between a post-quantum and a classical "
+                    "algorithm at runtime; the classical branch remains reachable "
+                    f"({line.strip()!r})",
+                )
+    return _PASS
+
+
+register(
+    RuleSpec(
+        rule_id="PQ-FALL-03",
+        layer=Layer.L1_SYNTACTIC,
+        unsafe_class=UnsafeClass.U2_CLASSICAL_FALLBACK,
+        cwe="CWE-757",
+        severity="high",
+        rationale=(
+            "The proposed patch chooses between a post-quantum and a classical "
+            "algorithm with a runtime condition, leaving a reachable classical "
+            "path behind a flag. Re-propose with the post-quantum primitive "
+            "unconditional."
+        ),
+        check=_check_runtime_toggle,
+        fixtures_dir=_FIXTURES / "PQ-FALL-03",
+    )
+)
+
+# --- PQ-FALL-04: U2 algorithm retry inside a handler -------------------------
+#
+# Acquiring *any* algorithm inside a catch block is a downgrade-on-failure
+# path, even when the retried algorithm is itself post-quantum (e.g. catching
+# and retrying with ML-KEM-512). Only simple, brace-free catch bodies are
+# convicted at L1; nested shapes are control-flow and belong to a future CFG.
+
+_GETINSTANCE_IN_CATCH_RE = re.compile(
+    r"catch\s*\([^)]*\)\s*\{[^{}]*getInstance", re.DOTALL
+)
+
+
+def _check_retry_in_catch(patch: Patch, site: Site, policy: Policy) -> RuleOutcome:
+    del site, policy
+    joined = "\n".join(added_lines(patch.unified_diff))
+    if _GETINSTANCE_IN_CATCH_RE.search(joined):
+        return RuleOutcome(
+            RuleStatus.FAIL,
+            detail="added code acquires an algorithm inside an exception handler; "
+            "retrying a different algorithm on failure is a downgrade path",
+        )
+    return _PASS
+
+
+register(
+    RuleSpec(
+        rule_id="PQ-FALL-04",
+        layer=Layer.L1_SYNTACTIC,
+        unsafe_class=UnsafeClass.U2_CLASSICAL_FALLBACK,
+        cwe="CWE-757",
+        severity="high",
+        rationale=(
+            "The proposed patch calls getInstance inside a catch block, so a "
+            "failure of the migrated primitive silently retries another "
+            "algorithm. Re-propose letting the failure propagate instead of "
+            "downgrading."
+        ),
+        check=_check_retry_in_catch,
+        fixtures_dir=_FIXTURES / "PQ-FALL-04",
+    )
+)
+
+# --- PQ-EXC-01: U7 catch that returns success --------------------------------
+
+_RETURN_TRUE_IN_CATCH_RE = re.compile(
+    r"catch\s*\([^)]*\)\s*\{[^{}]*return\s+true", re.DOTALL
+)
+
+
+def _check_catch_returns_success(patch: Patch, site: Site, policy: Policy) -> RuleOutcome:
+    del site, policy
+    joined = "\n".join(added_lines(patch.unified_diff))
+    if _RETURN_TRUE_IN_CATCH_RE.search(joined):
+        return RuleOutcome(
+            RuleStatus.FAIL,
+            detail="added catch block returns true; a cryptographic failure is "
+            "converted into a success result",
+        )
+    return _PASS
+
+
+register(
+    RuleSpec(
+        rule_id="PQ-EXC-01",
+        layer=Layer.L1_SYNTACTIC,
+        unsafe_class=UnsafeClass.U7_FAIL_OPEN,
+        cwe="CWE-636",
+        severity="high",
+        rationale=(
+            "The proposed patch returns success from an exception handler, so "
+            "a failed cryptographic operation is indistinguishable from a "
+            "successful one. Re-propose with failures propagated or reported "
+            "as failures."
+        ),
+        check=_check_catch_returns_success,
+        fixtures_dir=_FIXTURES / "PQ-EXC-01",
+    )
+)
+
+# --- PQ-EXC-02: U7 log-only exception swallow --------------------------------
+#
+# The classic swallow: a catch whose entire body is one logging statement, so
+# execution continues as if the operation had succeeded. Only single-statement
+# bodies are convicted; a body that also throws or returns is not a swallow.
+
+_LOG_ONLY_CATCH_RE = re.compile(
+    r"catch\s*\([^)]*\)\s*\{\s*"
+    r"(?:[A-Za-z_][\w.]*\.)?(?:printStackTrace|println|print|log|warn|info|error|debug)"
+    r"[^;{}]*;\s*\}",
+    re.DOTALL,
+)
+
+
+def _check_log_only_swallow(patch: Patch, site: Site, policy: Policy) -> RuleOutcome:
+    del site, policy
+    joined = "\n".join(added_lines(patch.unified_diff))
+    if _LOG_ONLY_CATCH_RE.search(joined):
+        return RuleOutcome(
+            RuleStatus.FAIL,
+            detail="added catch block only logs and continues; the cryptographic "
+            "failure is swallowed and execution proceeds as success",
+        )
+    return _PASS
+
+
+register(
+    RuleSpec(
+        rule_id="PQ-EXC-02",
+        layer=Layer.L1_SYNTACTIC,
+        unsafe_class=UnsafeClass.U7_FAIL_OPEN,
+        cwe="CWE-390",
+        severity="high",
+        rationale=(
+            "The proposed patch catches a cryptographic exception, logs it, and "
+            "continues, so failure does not stop the operation. Re-propose "
+            "rethrowing or failing closed after logging."
+        ),
+        check=_check_log_only_swallow,
+        fixtures_dir=_FIXTURES / "PQ-EXC-02",
     )
 )
