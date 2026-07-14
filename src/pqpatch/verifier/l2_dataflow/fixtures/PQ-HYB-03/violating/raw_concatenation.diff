@@ -1,0 +1,7 @@
+--- a/base.java
++++ b/base.java
+@@ -6,3 +6,3 @@
+         byte[] pq = dec.decapsulate(ct);
+-        return hkdf(concat(ec, pq));
++        return concat(ec, pq);
+     }

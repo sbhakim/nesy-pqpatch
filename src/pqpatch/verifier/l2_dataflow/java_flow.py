@@ -735,3 +735,275 @@ def algorithm_tokens_reaching_getinstance(source: str) -> frozenset[str] | None:
         if node.type in {"method_declaration", "constructor_declaration"}:
             reaching.update(_collect_getinstance_tokens(source_bytes, node))
     return frozenset(reaching)
+
+
+# --- PQ-VER-02: verify-result disjunction bypass ----------------------------
+#
+# PQ-VER-01 proves the verify() result reaches a branch; this analysis checks
+# *how* it is used there. `if (valid || trusted)` lets the branch succeed with
+# verification failed -- a bypass. A negated operand (`!valid || expired`) is
+# the fail-closed idiom and is safe; `&&` strengthens and is safe. Only a
+# non-negated tracked name appearing under a `||` is convicted.
+
+
+class VerifyBypass(enum.StrEnum):
+    SAFE = "safe"
+    BYPASSED = "bypassed"
+    INDETERMINATE = "indeterminate"
+
+
+def _or_operand_bypasses(source: bytes, node: Node, tracked: frozenset[str]) -> bool:
+    """True iff a `||` in this expression has a non-negated tracked operand."""
+    for item in _walk(node):
+        if item.type != "binary_expression":
+            continue
+        operator = item.child_by_field_name("operator")
+        if operator is None or _text(source, operator) != "||":
+            continue
+        for side_name in ("left", "right"):
+            side = item.child_by_field_name(side_name)
+            if side is None:
+                continue
+            if side.type == "identifier" and _text(source, side) in tracked:
+                return True
+            if side.type == "method_invocation" and any(
+                _text(source, part.child_by_field_name("name")) == "verify"
+                for part in _walk(side)
+                if part.type == "method_invocation"
+            ):
+                return True
+    return False
+
+
+def classify_verify_bypass(source: str) -> VerifyBypass:
+    """Detect verify() results that a `||` lets a branch bypass."""
+    source_bytes = source.encode("utf-8")
+    tree = Parser(_LANGUAGE).parse(source_bytes)
+    if tree.root_node.has_error:
+        return VerifyBypass.INDETERMINATE
+
+    for node in _walk(tree.root_node):
+        if node.type != "method_invocation":
+            continue
+        if _text(source_bytes, node.child_by_field_name("name")) != "verify":
+            continue
+        method = _method_ancestor(node)
+        if method is None:
+            continue
+        context, assigned_name = _verify_context(source_bytes, node, method)
+        tracked: set[str] = set()
+        if context == "assigned" and assigned_name:
+            tracked.add(assigned_name)
+        # conditions after (or containing) the invocation
+        for item in _walk_method(method):
+            if item.type not in {
+                "if_statement",
+                "while_statement",
+                "do_statement",
+                "ternary_expression",
+            }:
+                continue
+            condition = item.child_by_field_name("condition")
+            if condition is None:
+                continue
+            in_condition = _contains(condition, node)
+            uses_tracked = bool(tracked & _identifier_names(source_bytes, condition))
+            if not (in_condition or uses_tracked):
+                continue
+            if _or_operand_bypasses(source_bytes, condition, frozenset(tracked)):
+                return VerifyBypass.BYPASSED
+    return VerifyBypass.SAFE
+
+
+# --- PQ-RAND-04: constant setSeed before first use --------------------------
+#
+# L1's PQ-RAND-02 defers all setSeed questions because *whether* a setSeed
+# call determines the output depends on construction and ordering. The
+# decidable slice: a SecureRandom obtained as "SHA1PRNG" whose first
+# interaction is a constant setSeed is fully deterministic -- the seed
+# replaces, rather than supplements, the entropy. A setSeed after first use,
+# or a non-constant seed, is not convicted.
+
+
+class PrngSeed(enum.StrEnum):
+    SAFE = "safe"
+    DETERMINISTIC = "deterministic"
+    INDETERMINATE = "indeterminate"
+
+
+_PRNG_USE_METHODS = frozenset({"nextBytes", "nextInt", "nextLong", "nextDouble", "generateSeed"})
+
+
+def _analyze_prng_seed(source: bytes, method: Node) -> PrngSeed:
+    events: list[tuple[int, str, str | None, Node | None]] = []
+    for node in _walk_method(method):
+        if node.type in {"variable_declarator", "assignment_expression"}:
+            is_decl = node.type == "variable_declarator"
+            left_node = node.child_by_field_name("name" if is_decl else "left")
+            rhs = node.child_by_field_name("value" if is_decl else "right")
+            if left_node is None or left_node.type != "identifier":
+                continue
+            is_sha1prng = rhs is not None and any(
+                item.type == "method_invocation"
+                and _text(source, item.child_by_field_name("object")) == "SecureRandom"
+                and _text(source, item.child_by_field_name("name")) == "getInstance"
+                and "SHA1PRNG" in _text(source, item.child_by_field_name("arguments"))
+                for item in _walk(rhs)
+            )
+            kind = "prng" if is_sha1prng else "other"
+            events.append((node.start_byte, kind, _text(source, left_node), None))
+        elif node.type == "method_invocation":
+            name = _text(source, node.child_by_field_name("name"))
+            receiver_node = node.child_by_field_name("object")
+            receiver = (
+                _text(source, receiver_node)
+                if receiver_node is not None and receiver_node.type == "identifier"
+                else None
+            )
+            if name == "setSeed" and receiver is not None:
+                events.append((node.start_byte, "seed", receiver, node))
+            elif name in _PRNG_USE_METHODS and receiver is not None:
+                events.append((node.start_byte, "use", receiver, None))
+
+    prng: set[str] = set()
+    used: set[str] = set()
+    for _, ekind, ename, enode in sorted(events, key=lambda e: e[0]):
+        if ekind == "prng" and ename is not None:
+            prng.add(ename)
+            used.discard(ename)
+        elif ekind == "other" and ename is not None:
+            prng.discard(ename)
+        elif ekind == "use" and ename is not None:
+            used.add(ename)
+        elif ekind == "seed" and ename in prng and ename not in used and enode is not None:
+            args = enode.child_by_field_name("arguments")
+            first = args.named_children[0] if args is not None and args.named_children else None
+            if _is_constant_seed(source, first):
+                return PrngSeed.DETERMINISTIC
+    return PrngSeed.SAFE
+
+
+def classify_prng_seed(source: str) -> PrngSeed:
+    """Detect a constant setSeed that fully determines a SHA1PRNG's output."""
+    source_bytes = source.encode("utf-8")
+    tree = Parser(_LANGUAGE).parse(source_bytes)
+    if tree.root_node.has_error:
+        return PrngSeed.INDETERMINATE
+
+    for node in _walk(tree.root_node):
+        if node.type in {"method_declaration", "constructor_declaration"}:
+            if _analyze_prng_seed(source_bytes, node) is PrngSeed.DETERMINISTIC:
+                return PrngSeed.DETERMINISTIC
+    return PrngSeed.SAFE
+
+
+# --- PQ-HYB-03: combined secret must be derived, not used raw ----------------
+#
+# PQ-HYB-02 proves both secrets reach one combining expression; this analysis
+# checks what happens to the combination. Returning the raw concatenation as
+# key material skips the KDF the hybrid constructions require. The combine
+# node wrapped in a further call is derived (safe); returned raw -- directly
+# or through a variable that is returned unwrapped -- is convicted.
+
+
+class HybridUse(enum.StrEnum):
+    DERIVED = "derived"
+    RAW = "raw"
+    NOT_APPLICABLE = "not_applicable"
+    INDETERMINATE = "indeterminate"
+
+
+def _combine_nodes(source: bytes, method: Node) -> list[Node]:
+    classical: set[str] = set()
+    pq: set[str] = set()
+    for left, rhs in _assignments_in_order(source, method):
+        if _rhs_calls_any(source, rhs, _CLASSICAL_SECRET_METHODS):
+            classical.add(left)
+            pq.discard(left)
+        elif _rhs_calls_any(source, rhs, _PQ_SECRET_METHODS):
+            pq.add(left)
+            classical.discard(left)
+    if not (classical and pq):
+        return []
+    found = []
+    for node in _walk_method(method):
+        if node.type not in {"method_invocation", "object_creation_expression"}:
+            continue
+        args = node.child_by_field_name("arguments")
+        ids = _identifier_names(source, args if args is not None else node)
+        if ids & classical and ids & pq:
+            found.append(node)
+    return found
+
+
+def _analyze_hybrid_use(source: bytes, method: Node) -> HybridUse:
+    all_combines = _combine_nodes(source, method)
+    if not all_combines:
+        return HybridUse.NOT_APPLICABLE
+    # An outer call wrapping a combine (hkdf(concat(ec, pq))) matches the
+    # both-families test itself; only the innermost combine is the combiner,
+    # and the wrap check then sees the outer call as its derivation.
+    combines = [
+        c
+        for c in all_combines
+        if not any(other is not c and _contains(c, other) for other in all_combines)
+    ]
+
+    for combine in combines:
+        # wrapped in a further call between the combine and its statement?
+        wrapped = False
+        assigned_to: str | None = None
+        current = combine.parent
+        while current is not None and current != method:
+            if current.type in {"method_invocation", "object_creation_expression"}:
+                wrapped = True
+                break
+            if current.type == "variable_declarator":
+                assigned_to = _text(source, current.child_by_field_name("name"))
+                break
+            if current.type == "return_statement":
+                return HybridUse.RAW
+            current = current.parent
+        if wrapped:
+            continue
+        if assigned_to is not None:
+            # the combined variable: derived if it later feeds a call; raw if
+            # it is returned bare.
+            fed_to_call = False
+            returned_bare = False
+            for node in _walk_method(method):
+                if node.start_byte <= combine.end_byte:
+                    continue
+                if node.type in {"method_invocation", "object_creation_expression"}:
+                    args = node.child_by_field_name("arguments")
+                    if assigned_to in _identifier_names(source, args):
+                        fed_to_call = True
+                elif node.type == "return_statement":
+                    child = node.named_children[0] if node.named_children else None
+                    if (
+                        child is not None
+                        and child.type == "identifier"
+                        and _text(source, child) == assigned_to
+                    ):
+                        returned_bare = True
+            if returned_bare and not fed_to_call:
+                return HybridUse.RAW
+    return HybridUse.DERIVED
+
+
+def classify_hybrid_use(source: str) -> HybridUse:
+    """Classify whether combined hybrid secrets pass through a derivation."""
+    source_bytes = source.encode("utf-8")
+    tree = Parser(_LANGUAGE).parse(source_bytes)
+    if tree.root_node.has_error:
+        return HybridUse.INDETERMINATE
+
+    result = HybridUse.NOT_APPLICABLE
+    for node in _walk(tree.root_node):
+        if node.type in {"method_declaration", "constructor_declaration"}:
+            outcome = _analyze_hybrid_use(source_bytes, node)
+            if outcome is HybridUse.RAW:
+                return HybridUse.RAW
+            if outcome is HybridUse.DERIVED:
+                result = HybridUse.DERIVED
+    return result

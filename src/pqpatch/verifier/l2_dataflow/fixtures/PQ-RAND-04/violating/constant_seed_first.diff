@@ -1,0 +1,7 @@
+--- a/base.java
++++ b/base.java
+@@ -5,3 +5,3 @@
+         SecureRandom sr = SecureRandom.getInstance("SHA1PRNG");
+-        sr.setSeed(entropy);
++        sr.setSeed(1234567L);
+         sr.nextBytes(buf);

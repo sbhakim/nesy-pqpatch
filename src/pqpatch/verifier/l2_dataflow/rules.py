@@ -7,13 +7,19 @@ from pathlib import Path
 from pqpatch.model import Layer, Patch, Policy, RuleStatus, Site, UnsafeClass, UsageClass
 from pqpatch.verifier.l2_dataflow.java_flow import (
     HybridFlow,
+    HybridUse,
     KeyFlow,
+    PrngSeed,
     SeedFlow,
+    VerifyBypass,
     VerifyUse,
     algorithm_tokens_reaching_getinstance,
     classify_hybrid_flow,
+    classify_hybrid_use,
     classify_key_flow,
+    classify_prng_seed,
     classify_seed_provenance,
+    classify_verify_bypass,
     classify_verify_uses,
 )
 from pqpatch.verifier.rules import ranks
@@ -252,5 +258,135 @@ register(
         ),
         check=_check_param_flow,
         fixtures_dir=_FIXTURES / "PQ-PARAM-02",
+    )
+)
+
+
+def _check_verify_bypass(patch: Patch, site: Site, policy: Policy) -> RuleOutcome:
+    del policy
+    if site.usage_class is not UsageClass.VERIFY:
+        return _PASS
+    try:
+        patched = _patched_source(patch, site)
+    except (FileNotFoundError, DiffApplyError) as exc:
+        return RuleOutcome(RuleStatus.ERROR, detail=f"cannot analyze patched source: {exc}")
+
+    outcome = classify_verify_bypass(patched)
+    if outcome is VerifyBypass.BYPASSED:
+        return RuleOutcome(
+            RuleStatus.FAIL,
+            detail="the verify() result is OR-ed with another condition, so the "
+            "branch can succeed with verification failed (bypass)",
+        )
+    if outcome is VerifyBypass.INDETERMINATE:
+        return RuleOutcome(
+            RuleStatus.ERROR,
+            detail="patched source did not parse; L2 cannot prove the verify result "
+            "solely governs the branch",
+        )
+    return _PASS
+
+
+register(
+    RuleSpec(
+        rule_id="PQ-VER-02",
+        layer=Layer.L2_DATAFLOW,
+        unsafe_class=UnsafeClass.U3_UNCHECKED_VERIFY,
+        cwe="CWE-807",
+        severity="high",
+        rationale=(
+            "The migrated verification result reaches a branch, but OR-ed with "
+            "another condition -- the branch can be taken with verification "
+            "failed. Re-propose so acceptance requires the verify result to be "
+            "true, not merely one sufficient alternative."
+        ),
+        check=_check_verify_bypass,
+        fixtures_dir=_FIXTURES / "PQ-VER-02",
+    )
+)
+
+
+def _check_prng_seed(patch: Patch, site: Site, policy: Policy) -> RuleOutcome:
+    # Ordering property, source-internal; does not gate on usage_class.
+    del policy
+    try:
+        patched = _patched_source(patch, site)
+    except (FileNotFoundError, DiffApplyError) as exc:
+        return RuleOutcome(RuleStatus.ERROR, detail=f"cannot analyze patched source: {exc}")
+
+    outcome = classify_prng_seed(patched)
+    if outcome is PrngSeed.DETERMINISTIC:
+        return RuleOutcome(
+            RuleStatus.FAIL,
+            detail="a SHA1PRNG SecureRandom receives a constant setSeed before its "
+            "first use, so its entire output stream is deterministic",
+        )
+    if outcome is PrngSeed.INDETERMINATE:
+        return RuleOutcome(
+            RuleStatus.ERROR,
+            detail="patched source did not parse; L2 cannot prove seed ordering",
+        )
+    return _PASS
+
+
+register(
+    RuleSpec(
+        rule_id="PQ-RAND-04",
+        layer=Layer.L2_DATAFLOW,
+        unsafe_class=UnsafeClass.U5_RANDOMNESS_MISUSE,
+        cwe="CWE-337",
+        severity="high",
+        rationale=(
+            "A deterministically-seeded PRNG is seeded with a constant before "
+            "its first use, so key material derived from it is predictable. "
+            "Re-propose seeding from an approved entropy source, or reseeding "
+            "only to supplement an already-seeded generator."
+        ),
+        check=_check_prng_seed,
+        fixtures_dir=_FIXTURES / "PQ-RAND-04",
+    )
+)
+
+
+def _check_hybrid_use(patch: Patch, site: Site, policy: Policy) -> RuleOutcome:
+    # Engages only when a both-family combination exists; no usage_class gate.
+    del policy
+    try:
+        patched = _patched_source(patch, site)
+    except (FileNotFoundError, DiffApplyError) as exc:
+        return RuleOutcome(RuleStatus.ERROR, detail=f"cannot analyze patched source: {exc}")
+
+    outcome = classify_hybrid_use(patched)
+    if outcome is HybridUse.RAW:
+        return RuleOutcome(
+            RuleStatus.FAIL,
+            detail="the combined hybrid secret is used raw (returned without a "
+            "KDF); hybrid constructions require a derivation over the "
+            "combined secret",
+        )
+    if outcome is HybridUse.INDETERMINATE:
+        return RuleOutcome(
+            RuleStatus.ERROR,
+            detail="patched source did not parse; L2 cannot prove the combined "
+            "secret is derived",
+        )
+    return _PASS
+
+
+register(
+    RuleSpec(
+        rule_id="PQ-HYB-03",
+        layer=Layer.L2_DATAFLOW,
+        unsafe_class=UnsafeClass.U6_HYBRID_DOWNGRADE,
+        cwe="CWE-327",
+        severity="medium",
+        rationale=(
+            "Both hybrid secrets are combined, but the combination is used raw "
+            "as key material instead of passing through a key-derivation "
+            "function. Re-propose deriving the key from the combined secret "
+            "(e.g. HKDF over the concatenation)."
+        ),
+        check=_check_hybrid_use,
+        fixtures_dir=_FIXTURES / "PQ-HYB-03",
     )
 )
