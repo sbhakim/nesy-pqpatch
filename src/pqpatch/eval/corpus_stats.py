@@ -12,6 +12,8 @@ from pathlib import Path
 
 import yaml
 
+from pqpatch.eval.traps import load_trap_suite, summarize_suite
+
 _CORPUS = Path(__file__).resolve().parents[3] / "corpus"
 
 
@@ -29,11 +31,24 @@ def main() -> int:
     print(f"  tier2 total: {len(tier2_apps)} app(s), {total_sites} sites")
 
     tier1 = list((_CORPUS / "tier1" / "original").iterdir())
-    traps_dev = list((_CORPUS / "traps" / "dev").iterdir())
-    traps_held = list((_CORPUS / "traps" / "heldout").iterdir())
+
+    # Traps are validated on load: a malformed descriptor is a hard error here,
+    # never a miscounted row. summarize_suite reports the construct-validity
+    # facts (provenance mix, compiling fraction, blind-label kappa) offline.
+    specs = load_trap_suite(_CORPUS / "traps")
+    stats = summarize_suite(specs)
+    kappa_str = f"{stats.kappa:.3f}" if stats.kappa is not None else "n/a"
     print(
         f"  tier1/original: {len(tier1)} entries; "
-        f"traps: {len(traps_dev)} dev, {len(traps_held)} held-out"
+        f"traps: {stats.n_dev} dev, {stats.n_heldout} held-out"
+    )
+    print(
+        f"    trap provenance: {stats.n_taxonomy} taxonomy, {stats.n_external} external, "
+        f"{stats.n_unanticipated} unanticipated"
+    )
+    print(
+        f"    compiling-unsafe: {stats.n_compiling_unsafe}/{stats.total}; "
+        f"blind-label kappa: {kappa_str}"
     )
 
     print(

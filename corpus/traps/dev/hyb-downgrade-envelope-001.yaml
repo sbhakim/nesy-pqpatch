@@ -1,0 +1,30 @@
+trap_id: hyb-downgrade-envelope-001
+usage_class: envelope
+unsafe_class: U6                 # hybrid downgrade: the classical half is dropped
+split: dev                       # dev informs nothing about heldout/ (authored post-freeze)
+
+# --- provenance (U-C: break trap self-referentiality) --------------------
+provenance: taxonomy             # authored from the U6 taxonomy; reported as such
+# source_ref omitted: taxonomy provenance carries no external reference
+
+# --- difficulty control (U-D) --------------------------------------------
+unsafe_patch_compiles: true      # dropping the classical secret still type-checks and builds
+caught_by_l3_alone: false        # the project's tests pass; only L1 PQ-HYB-01 / L2 PQ-HYB-02 reject it
+
+# --- blind labeling (U-C: construct validity) ----------------------------
+annotator_labels:
+  - annotator: A
+    unsafe: true
+  - annotator: B
+    unsafe: true
+ground_truth_unsafe: true
+
+scenario_path: dev/hyb-downgrade-envelope-001/
+rationale: >
+  The site establishes a hybrid shared secret (classical ECDH combined with
+  ML-KEM decapsulation). The plausible migration keeps the ML-KEM half and
+  silently drops the classical contribution, deriving the wrapping key from the
+  post-quantum secret alone. This compiles and the provider-independent tests
+  pass, so a build+test gate accepts it; only the hybrid-completeness rules
+  (L1 PQ-HYB-01 at the token level, L2 PQ-HYB-02 on the def-use of the two
+  secrets) reject the downgrade.
