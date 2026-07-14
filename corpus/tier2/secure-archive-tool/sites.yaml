@@ -1,0 +1,50 @@
+# Ground truth for Tier-2 reference app #2 (secure archive tool).
+# Consumed by tests/integration/test_detector_tier2_archive.py to compute
+# detector precision/recall, exactly as app #1's sites.yaml is.
+#
+# Line numbers were confirmed against a real detector run, not hand-counted
+# (the app-#1 lesson: STATUS.md "ground-truth authoring error" #6).
+#
+# `detectable: true` sites use a literal algorithm-string JCA call and are
+# expected to be found by the current semgrep pack.
+# `detectable: false` sites are seeded specifically to be missed (RQ0 miss
+# rate) -- here the algorithm name is assembled by string concatenation, a
+# different miss mechanism from app #1's configuration lookup.
+
+app: secure-archive-tool
+file: src/archive/ArchiveCrypto.java
+
+sites:
+  - line: 20
+    usage_class: sign          # KeyPairGenerator("DSA"); no KeyAgreement in the
+    detectable: true           # classify window, so it resolves to SIGN
+
+  - line: 27
+    usage_class: sign          # SHA384withECDSA + initSign
+    detectable: true
+
+  - line: 35
+    usage_class: verify        # SHA256withECDSA + initVerify
+    detectable: true
+
+  - line: 43
+    usage_class: envelope      # RSA/ECB/PKCS1Padding key wrap
+    detectable: true
+
+  - line: 50
+    usage_class: kem           # KeyPairGenerator("DiffieHellman"); KeyAgreement
+    detectable: true           # in the classify window resolves it to KEM
+
+  - line: 57
+    usage_class: kem           # KeyAgreement.getInstance("DH")
+    detectable: true
+
+  - line: 71
+    usage_class: verify        # true usage class if it were detectable; the
+    detectable: false          # algorithm string is concatenated at runtime, so
+    note: concatenated algorithm name; expected detector miss (RQ0)
+
+counts:
+  total_sites: 7
+  detectable: 6
+  expected_miss: 1

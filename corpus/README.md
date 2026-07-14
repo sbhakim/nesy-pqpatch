@@ -34,5 +34,5 @@ The trap format is `traps/SCHEMA.md` (v2): each trap carries its provenance
 difficulty control (does the unsafe patch compile; would build+test alone catch
 it) so the load-bearing catch can be isolated from what a compile gate handles
 anyway. The held-out suite is intentionally unfrozen while the rule set is still
-growing (6 of 14 L1 rules; L2 pending ADR-001): freezing traps against an
-unfinished taxonomy would overfit them to it.
+growing (9 of 14 L1 rules; 5 of 22 L2 rules on the bounded ADR-001 frontend):
+freezing traps against an unfinished taxonomy would overfit them to it.

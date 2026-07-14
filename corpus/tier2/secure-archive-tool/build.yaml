@@ -1,0 +1,14 @@
+# Declarative build recipe for L3 (verifier/l3_build.py, project mode).
+#
+# App #2 deliberately differs from app #1 in build shape: sources live in a
+# Java package (nested source directory) and the test entrypoint is a
+# package-qualified class name -- exercising exactly the assumptions a flat,
+# single-directory seed app cannot. The suite is provider independent, so it
+# passes on any JDK; runtime conformance of the migrated primitive is L4's
+# concern, not L3's.
+project: secure-archive-tool
+language: java
+source_dir: src
+test_entrypoint: archive.ArchiveTests
+compile_timeout_s: 60
+test_timeout_s: 30
