@@ -1,7 +1,7 @@
 # ADR-001: L2 dataflow/typestate engine selection
 
-**Status:** accepted; structural frontend adopted; 3 T0 rules shipped (PQ-VER-01 U3, PQ-KEY-02 U4, PQ-HYB-02 U6)
-**Date:** 2026-07-11 (opened); 2026-07-12 (decision); 2026-07-13 (frontend revision + PQ-KEY-02 spike + PQ-HYB-02)
+**Status:** accepted; structural frontend adopted; 4 T0 rules shipped (PQ-VER-01 U3, PQ-KEY-02 U4, PQ-HYB-02 U6, PQ-RAND-03 U5)
+**Date:** 2026-07-11 (opened); 2026-07-12 (decision); 2026-07-13 (frontend revision + PQ-KEY-02 spike + PQ-HYB-02 + PQ-RAND-03)
 
 ## Context
 
@@ -74,28 +74,34 @@ scopes what a future typed frontend must add for the remaining U4/U5/U6 rules.
 secrets (classical `generateSecret`, PQ `decapsulate`) converging on one
 combiner is the same flow-to-sink shape as `PQ-KEY-02`, and it too decides at
 T0. It catches the hybrid downgrade L1's token-level `PQ-HYB-01` cannot see (both
-algorithm tokens can be present while the flow still drops one secret). The
-honest ceiling for this bounded frontend is roughly 8 L2 rules; the U7 and U2
-reachability rules need an intraprocedural control-flow graph and the U4 tail
-needs declared-type resolution -- a project-level frontend decision, not another
-per-rule spike.
+algorithm tokens can be present while the flow still drops one secret).
+`PQ-RAND-03` (U5, 2026-07-13) is the same shape once more: a constant seed
+(literal, fixed byte array, or `"…".getBytes()`) tainting a variable that reaches
+`SecureRandom`, catching the seed provenance L1's `PQ-RAND-02` cannot follow past
+a direct literal. Four T0 rules now cover U3/U4/U5/U6. The honest ceiling for this
+bounded frontend is roughly 8 L2 rules; the U7 and U2 reachability rules need an
+intraprocedural control-flow graph and the U4 tail needs declared-type
+resolution -- a project-level frontend decision, not another per-rule spike.
 
 ## Consequences
 
 - Verdicts produced under the default configuration now include
   `Layer.L2_DATAFLOW`; configurations that remove L2 remain explicit ablations.
-- The current L2 count is **3 of the planned 22** (`PQ-VER-01`, `PQ-KEY-02`,
-  `PQ-HYB-02`), each decided by the same bounded intraprocedural def-use. No
-  result may describe this vertical slice as the complete L2 rule set.
-- Three regression tests demonstrate the intended scientific contrast. (a) A patch
+- The current L2 count is **4 of the planned 22** (`PQ-VER-01`, `PQ-KEY-02`,
+  `PQ-HYB-02`, `PQ-RAND-03`), each decided by the same bounded intraprocedural
+  def-use. No result may describe this vertical slice as the complete L2 rule set.
+- Four regression tests demonstrate the intended scientific contrast. (a) A patch
   that discards `verify()`, compiles, and passes the seed project's tests is
   accepted by L1+L3 but rejected by L2 as `PQ-VER-01`. (b) A migration that puts
   both algorithm families in scope makes L1's `PQ-KEY-01` *defer*, so L1 accepts,
   while L1+L2 rejects the ML-KEM-key-into-signature flow as `PQ-KEY-02`. (c) A
   hybrid migration whose added text carries both an ML-KEM and an X25519 token
   passes L1's token-level `PQ-HYB-01`, while L1+L2 rejects it as `PQ-HYB-02`
-  because the flow feeds only one shared secret to the KDF -- the "beyond tokens"
-  contribution of L2, made executable. Each is an L1->L2 escalation boundary.
+  because the flow feeds only one shared secret to the KDF. (d) A migration that
+  routes a literal seed through a variable into `SecureRandom` passes L1's
+  `PQ-RAND-02` (which only sees a literal directly in the constructor), while
+  L1+L2 rejects it as `PQ-RAND-03`. Each is the "beyond tokens" L1->L2 escalation
+  boundary, made executable.
 - Runtime dependencies are bounded to `tree-sitter` 0.26.x and
   `tree-sitter-java` 0.23.x in `pyproject.toml`; CI installs them through the
   normal package installation path.
