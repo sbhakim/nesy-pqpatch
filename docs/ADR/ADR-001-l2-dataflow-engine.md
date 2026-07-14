@@ -1,7 +1,7 @@
 # ADR-001: L2 dataflow/typestate engine selection
 
-**Status:** accepted; structural frontend adopted; 5 T0 rules shipped covering U1/U3/U4/U5/U6 (PQ-VER-01, PQ-KEY-02, PQ-HYB-02, PQ-RAND-03, PQ-PARAM-02)
-**Date:** 2026-07-11 (opened); 2026-07-12 (decision); 2026-07-13 (frontend revision + the five T0 rules)
+**Status:** accepted; structural frontend adopted; **T0/T1 slice complete at 8 rules** covering U1/U3/U4/U5/U6 (PQ-VER-01/02, PQ-KEY-02, PQ-HYB-02/03, PQ-RAND-03/04, PQ-PARAM-02)
+**Date:** 2026-07-11 (opened); 2026-07-12 (decision); 2026-07-13 (frontend + first five rules); 2026-07-14 (slice completed, Option-1 freeze)
 
 ## Context
 
@@ -93,10 +93,18 @@ decision, not another per-rule spike.
 
 - Verdicts produced under the default configuration now include
   `Layer.L2_DATAFLOW`; configurations that remove L2 remain explicit ablations.
-- The current L2 count is **5 of the planned 22** (`PQ-VER-01`, `PQ-KEY-02`,
-  `PQ-HYB-02`, `PQ-RAND-03`, `PQ-PARAM-02`), each decided by the same bounded
-  intraprocedural def-use. No result may describe this vertical slice as the
-  complete L2 rule set.
+- The L2 slice is **complete at its T0/T1 ceiling: 8 rules** (`PQ-VER-01/02`,
+  `PQ-KEY-02`, `PQ-HYB-02/03`, `PQ-RAND-03/04`, `PQ-PARAM-02`), each decided by
+  the same bounded intraprocedural def-use. The three final rules (2026-07-14):
+  `PQ-VER-02` convicts a verify result OR-ed into a bypassable branch (negated
+  fail-closed operands and `&&` are safe); `PQ-RAND-04` convicts a constant
+  `setSeed` on a `"SHA1PRNG"` generator before its first use (after first use it
+  supplements and is safe); `PQ-HYB-03` convicts a combined hybrid secret used
+  raw instead of passing through a KDF (the innermost combining expression must
+  be wrapped by a further call, or its variable fed to one). The remaining ~14
+  of Table 3's 22 require a CFG or declared-type resolution; under the Option-1
+  freeze they are *specified taxonomy*, and the manuscript's committed counts
+  are to be edited in one pass to match the artifact (16 L1 + 8 L2 = 24).
 - Five regression tests demonstrate the intended scientific contrast. (a) A patch
   that discards `verify()`, compiles, and passes the seed project's tests is
   accepted by L1+L3 but rejected by L2 as `PQ-VER-01`. (b) A migration that puts
