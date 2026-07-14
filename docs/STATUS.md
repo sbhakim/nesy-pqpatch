@@ -11,13 +11,13 @@ All commands below were actually run, not assumed:
 ```
 ruff check src tests        -> All checks passed!
 mypy                          -> Success: no issues found in 95 source files
-pytest tests/                -> 185 passed
+pytest tests/                -> 189 passed
 ```
 
 (Earlier in the project this read 64 files / 75 tests, then 67 / 104 after the
 evaluation-robustness upgrades — ADR-004, U-A…U-F; then 82 / 142 after the
-live-pilot fixes below; then 85 / 153, 88 / 163, and 91 / 174 as the L2 rules
-landed; the latest increase is the `PQ-PARAM-02` L2 rule.)
+live-pilot fixes below; then 85 / 153 through 95 / 185 as the five L2 rules
+landed; the latest increase is Tier-2 app #2, `secure-archive-tool`.)
 
 External tools used for real (not mocked): `semgrep` 1.169.0, `javac`/`java`
 11.0.31 (system JDK), `git`, `docker` (present, not yet used). **Live local
@@ -32,7 +32,7 @@ were **not** used — a paid, outward-facing call needs explicit authorization.
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Skeleton, pyproject, CI, `model.py` | **Real.** Package installs editable, imports, CLI runs. |
-| 1 | Detector + seed Tier-2 app | **Real.** Semgrep pack (4 rules) + `classify.py` verified against `corpus/tier2/file-signing-cli`: precision 100%, recall 6/6 detectable (= 6/7 seeded; the 7th is deliberately undetectable by design). |
+| 1 | Detector + Tier-2 apps | **Real, now two apps.** Semgrep pack (4 rules) + `classify.py` verified against `corpus/tier2/file-signing-cli` *and* `corpus/tier2/secure-archive-tool` (added 2026-07-14): each seeds 7 sites (6 detectable + 1 deliberate miss), precision 100%, recall 6/6 detectable per app. App #2 deliberately varies the surface — a Java **package** (nested build, dotted `archive.ArchiveTests` entrypoint), different classical algorithms (DSA/ECDSA/DH/RSA-PKCS1), and a different hard-site mechanism (concatenated algorithm string vs. app #1's config lookup). Ground-truth lines were confirmed against a real detector run, not hand-counted (lesson from bug #6 below). Two L3 probes prove project mode handles the packaged tree: a benign migration passes build+tests, and a compiling API-break is caught only by the project's own reflective suite. |
 | 2 | Rule metadata + fixtures + L1 rules | **Real, reduced count.** **9** L1 rules with fixtures, including `PQ-KEY-01` (unambiguous primitive-family mismatch) and `PQ-RAND-02` (literal-seeded `SecureRandom`). Manuscript Table 3 commits to 14 L1 rules; ambiguous flow remains assigned to L2 rather than guessed at L1. |
 | 3 | Proposer, cache, repair loop | **Real, now exercised on live models.** `Backend` ABC, content-addressed `CacheStore`, `ReplayBackend` test double, `loop.py` implementing Algorithm 1. `backend_c` (local OpenAI-compatible) was driven end-to-end against **Ollama** for the first time — real proposals, cached and reproducible. `backend_a`/`backend_b` (hosted) remain unexercised pending authorization to spend. |
 | Verifier orchestrator | Eq. (1) short-circuit composition | **Real.** `verify_patch()` runs L1, the implemented L2 registry, then L3 by default; L4 remains explicitly excluded, and every `Verdict.layers_evaluated` records the truth. |
@@ -128,8 +128,10 @@ gap. No paper-scale numbers exist; the manuscript's `XX.X%` remain placeholders.
    such requirement in ADR-001 before building.
 2. Grow the L1 rule set from 9 to the manuscript's committed 14 (or edit the
    committed count in the same commit if it changes).
-3. Add the remaining five Tier-2 reference applications — each with a
-   `build.yaml` and a real test suite so project-mode L3 applies to all of them.
+3. Add the remaining four Tier-2 reference applications (2 of 6 exist) — each
+   with a `build.yaml` and a real test suite so project-mode L3 applies to all
+   of them, and each varying the surface (build shape, algorithms, miss
+   mechanism) the way `secure-archive-tool` does.
 4. Once the rule set is frozen, author the held-out trap suite under
    `traps/SCHEMA.md` v2 (size from `metrics.min_traps_for_ci_half_width`, ≈25–30),
    with external PR/CVE-provenance traps and two-annotator blind labels (U-C).
