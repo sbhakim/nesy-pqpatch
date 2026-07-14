@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 
 from pqpatch.model import Layer, Patch, Policy, RuleStatus, Site, UnsafeClass, UsageClass
+from pqpatch.verifier.rules import ranks
 from pqpatch.verifier.rules.diffutil import (
     added_lines,
     path_in_scope,
@@ -26,18 +27,12 @@ _FIXTURES = Path(__file__).parent / "fixtures"
 _PASS = RuleOutcome(RuleStatus.PASS)
 
 # --- PQ-PARAM-01: U1 parameter weakening -----------------------------------
+# Ranks and the token pattern live in rules/ranks.py, shared with the L2 flow
+# check (PQ-PARAM-02) so the floor comparison cannot drift between layers.
 
-_KEM_RANK = {"ML-KEM-512": 1, "ML-KEM-768": 3, "ML-KEM-1024": 5}
-_SIG_RANK = {"ML-DSA-44": 2, "ML-DSA-65": 3, "ML-DSA-87": 5}
-_TOKEN_RE = re.compile(r"ML-(?:KEM|DSA)-\d{2,4}")
-
-
-def _floor_rank(floor: str) -> int | None:
-    return _KEM_RANK.get(floor) or _SIG_RANK.get(floor)
-
-
-def _token_rank(token: str) -> int | None:
-    return _KEM_RANK.get(token) or _SIG_RANK.get(token)
+_TOKEN_RE = ranks.TOKEN_RE
+_floor_rank = ranks.floor_rank
+_token_rank = ranks.token_rank
 
 
 def _check_param_weakening(patch: Patch, site: Site, policy: Policy) -> RuleOutcome:

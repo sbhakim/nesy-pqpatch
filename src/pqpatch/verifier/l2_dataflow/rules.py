@@ -10,11 +10,13 @@ from pqpatch.verifier.l2_dataflow.java_flow import (
     KeyFlow,
     SeedFlow,
     VerifyUse,
+    algorithm_tokens_reaching_getinstance,
     classify_hybrid_flow,
     classify_key_flow,
     classify_seed_provenance,
     classify_verify_uses,
 )
+from pqpatch.verifier.rules import ranks
 from pqpatch.verifier.rules.diffapply import DiffApplyError, apply_unified_diff
 from pqpatch.verifier.rules.registry import register
 from pqpatch.verifier.rules.spec import RuleOutcome, RuleSpec
@@ -201,5 +203,54 @@ register(
         ),
         check=_check_seed_provenance,
         fixtures_dir=_FIXTURES / "PQ-RAND-03",
+    )
+)
+
+
+def _check_param_flow(patch: Patch, site: Site, policy: Policy) -> RuleOutcome:
+    floor = policy.floors.get(site.usage_class)
+    if floor is None:
+        return _PASS
+    floor_rank = ranks.floor_rank(floor)
+    if floor_rank is None:
+        return _PASS
+    try:
+        patched = _patched_source(patch, site)
+    except (FileNotFoundError, DiffApplyError) as exc:
+        return RuleOutcome(RuleStatus.ERROR, detail=f"cannot analyze patched source: {exc}")
+
+    tokens = algorithm_tokens_reaching_getinstance(patched)
+    if tokens is None:
+        return RuleOutcome(
+            RuleStatus.ERROR,
+            detail="patched source did not parse; L2 cannot prove the parameter floor",
+        )
+    for token in sorted(tokens):
+        token_rank = ranks.token_rank(token)
+        if token_rank is not None and token_rank < floor_rank:
+            return RuleOutcome(
+                RuleStatus.FAIL,
+                detail=f"parameter {token} (category rank {token_rank}) reaches "
+                f"getInstance in the patched source, below the policy floor "
+                f"{floor} (category rank {floor_rank})",
+            )
+    return _PASS
+
+
+register(
+    RuleSpec(
+        rule_id="PQ-PARAM-02",
+        layer=Layer.L2_DATAFLOW,
+        unsafe_class=UnsafeClass.U1_PARAM_WEAKENING,
+        cwe="CWE-326",
+        severity="high",
+        rationale=(
+            "In the patched program, a post-quantum parameter set below the "
+            "policy floor flows into getInstance -- through a variable, so the "
+            "token need not appear in the diff itself. Re-propose so every "
+            "algorithm string reaching getInstance meets the policy floor."
+        ),
+        check=_check_param_flow,
+        fixtures_dir=_FIXTURES / "PQ-PARAM-02",
     )
 )

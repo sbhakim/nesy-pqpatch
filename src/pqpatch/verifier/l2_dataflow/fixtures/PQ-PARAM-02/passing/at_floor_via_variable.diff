@@ -1,0 +1,7 @@
+--- a/base.java
++++ b/base.java
+@@ -4,3 +4,3 @@
+     Signature build() throws Exception {
+-        String algorithm = "ML-DSA-65";
++        String algorithm = "ML-DSA-87";
+         return Signature.getInstance(algorithm);

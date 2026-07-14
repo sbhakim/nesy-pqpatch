@@ -637,3 +637,101 @@ def classify_seed_provenance(source: str) -> SeedFlow:
             if _analyze_seed(source_bytes, node) is SeedFlow.LITERAL_SEEDED:
                 return SeedFlow.LITERAL_SEEDED
     return SeedFlow.CLEAN
+
+
+# --- PQ-PARAM-02: parameter tokens reaching getInstance ---------------------
+#
+# L1's PQ-PARAM-01 scans the diff's added lines for below-floor parameter
+# tokens; a token that reaches `getInstance` through a variable defined outside
+# the diff hunks never appears in an added line, so L1 structurally cannot see
+# it. This analysis collects, over the whole patched source, every algorithm
+# token that reaches a `getInstance` argument -- directly as a string literal or
+# through a tainted local variable / simple alias. Ranking against the policy
+# floor is the rule's job (shared tables in verifier/rules/ranks.py). Parameters,
+# fields, and cross-method provenance are out of the bounded scope; a parse
+# error is indeterminate (None).
+
+_PARAM_TOKEN_RE = re.compile(r"ML-(?:KEM|DSA)-\d{2,4}")
+
+
+def _tokens_in(source: bytes, node: Node | None) -> frozenset[str]:
+    if node is None:
+        return frozenset()
+    found: set[str] = set()
+    for item in _walk(node):
+        if item.type == "string_literal":
+            found.update(_PARAM_TOKEN_RE.findall(_text(source, item)))
+    return frozenset(found)
+
+
+def _collect_getinstance_tokens(source: bytes, method: Node) -> frozenset[str]:
+    @dataclass(frozen=True, slots=True)
+    class _Step:
+        position: int
+        kind: str
+        left: str | None = None
+        tokens: frozenset[str] = frozenset()
+        alias: str | None = None
+        used_names: frozenset[str] = frozenset()
+
+    steps: list[_Step] = []
+    for node in _walk_method(method):
+        if node.type in {"variable_declarator", "assignment_expression"}:
+            is_decl = node.type == "variable_declarator"
+            left_node = node.child_by_field_name("name" if is_decl else "left")
+            rhs = node.child_by_field_name("value" if is_decl else "right")
+            if left_node is not None and left_node.type == "identifier":
+                steps.append(
+                    _Step(
+                        node.start_byte,
+                        "assign",
+                        left=_text(source, left_node),
+                        tokens=_tokens_in(source, rhs),
+                        alias=_simple_identifier(source, rhs),
+                    )
+                )
+        elif node.type == "method_invocation" and (
+            _text(source, node.child_by_field_name("name")) == "getInstance"
+        ):
+            args = node.child_by_field_name("arguments")
+            steps.append(
+                _Step(
+                    node.start_byte,
+                    "sink",
+                    tokens=_tokens_in(source, args),
+                    used_names=_identifier_names(source, args),
+                )
+            )
+
+    reaching: set[str] = set()
+    taint: dict[str, frozenset[str]] = {}
+    for step in sorted(steps, key=lambda s: s.position):
+        if step.kind == "sink":
+            reaching.update(step.tokens)
+            for name in step.used_names:
+                reaching.update(taint.get(name, frozenset()))
+            continue
+        if step.left is None:
+            continue
+        if step.tokens:
+            taint[step.left] = step.tokens
+        elif step.alias is not None and step.alias in taint:
+            taint[step.left] = taint[step.alias]
+        else:
+            taint.pop(step.left, None)
+    return frozenset(reaching)
+
+
+def algorithm_tokens_reaching_getinstance(source: str) -> frozenset[str] | None:
+    """Every parameter token that reaches a ``getInstance`` argument, or None on
+    a parse error."""
+    source_bytes = source.encode("utf-8")
+    tree = Parser(_LANGUAGE).parse(source_bytes)
+    if tree.root_node.has_error:
+        return None
+
+    reaching: set[str] = set()
+    for node in _walk(tree.root_node):
+        if node.type in {"method_declaration", "constructor_declaration"}:
+            reaching.update(_collect_getinstance_tokens(source_bytes, node))
+    return frozenset(reaching)

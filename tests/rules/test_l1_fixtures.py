@@ -30,7 +30,13 @@ _DEFAULT_SITE = Site(
 _DEFAULT_POLICY = Policy(
     name="fixture-default",
     version="v1",
-    floors={UsageClass.KEM: "ML-KEM-768", UsageClass.SIGN: "ML-DSA-65"},
+    # VERIFY shares the SIGN floor: the L2 fixture harness pins sites to
+    # usage_class=VERIFY, and floor-gated L2 rules (PQ-PARAM-02) must engage.
+    floors={
+        UsageClass.KEM: "ML-KEM-768",
+        UsageClass.SIGN: "ML-DSA-65",
+        UsageClass.VERIFY: "ML-DSA-65",
+    },
     hybrid_required={UsageClass.KEM: True},
     allowed_randomness_sources=("SecureRandom",),
 )
