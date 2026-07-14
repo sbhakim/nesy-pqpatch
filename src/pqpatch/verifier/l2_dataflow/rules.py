@@ -8,9 +8,11 @@ from pqpatch.model import Layer, Patch, Policy, RuleStatus, Site, UnsafeClass, U
 from pqpatch.verifier.l2_dataflow.java_flow import (
     HybridFlow,
     KeyFlow,
+    SeedFlow,
     VerifyUse,
     classify_hybrid_flow,
     classify_key_flow,
+    classify_seed_provenance,
     classify_verify_uses,
 )
 from pqpatch.verifier.rules.diffapply import DiffApplyError, apply_unified_diff
@@ -157,5 +159,47 @@ register(
         ),
         check=_check_hybrid_completeness,
         fixtures_dir=_FIXTURES / "PQ-HYB-02",
+    )
+)
+
+
+def _check_seed_provenance(patch: Patch, site: Site, policy: Policy) -> RuleOutcome:
+    # A constant seed makes the generator predictable at any site; the check is a
+    # source-internal flow property and does not gate on usage_class.
+    del policy
+    try:
+        patched = _patched_source(patch, site)
+    except (FileNotFoundError, DiffApplyError) as exc:
+        return RuleOutcome(RuleStatus.ERROR, detail=f"cannot analyze patched source: {exc}")
+
+    flow = classify_seed_provenance(patched)
+    if flow is SeedFlow.LITERAL_SEEDED:
+        return RuleOutcome(
+            RuleStatus.FAIL,
+            detail="a fixed/literal seed reaches SecureRandom through a variable, "
+            "making key-generation randomness predictable",
+        )
+    if flow is SeedFlow.INDETERMINATE:
+        return RuleOutcome(
+            RuleStatus.ERROR,
+            detail="patched source did not parse; L2 cannot prove seed provenance",
+        )
+    return _PASS
+
+
+register(
+    RuleSpec(
+        rule_id="PQ-RAND-03",
+        layer=Layer.L2_DATAFLOW,
+        unsafe_class=UnsafeClass.U5_RANDOMNESS_MISUSE,
+        cwe="CWE-337",
+        severity="high",
+        rationale=(
+            "Key-generation randomness is seeded from a fixed/literal value that "
+            "reaches SecureRandom through a variable, so the generator is "
+            "predictable. Re-propose seeding only from an approved entropy source."
+        ),
+        check=_check_seed_provenance,
+        fixtures_dir=_FIXTURES / "PQ-RAND-03",
     )
 )

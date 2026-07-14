@@ -1,0 +1,7 @@
+--- a/base.java
++++ b/base.java
+@@ -4,3 +4,3 @@
+     SecureRandom build(byte[] entropy) throws Exception {
+-        byte[] seed = entropy;
++        byte[] seed = SecureRandom.getInstanceStrong().generateSeed(32);
+         SecureRandom sr = new SecureRandom(seed);

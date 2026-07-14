@@ -512,3 +512,128 @@ def classify_hybrid_flow(source: str) -> HybridFlow:
             if outcome is HybridFlow.COMPLETE:
                 result = HybridFlow.COMPLETE
     return result
+
+
+# --- PQ-RAND-03: seed provenance -------------------------------------------
+#
+# L1's PQ-RAND-02 rejects a `SecureRandom` constructed directly from a literal
+# seed. This L2 rule handles the flow case L1 defers: a fixed/constant seed that
+# reaches `SecureRandom` *through a variable* (or a simple alias). A constant seed
+# is a string/byte/numeric literal, a literal or fixed-size byte array (`new
+# byte[32]` is a zero seed), or `"literal".getBytes(...)`. If such a value reaches
+# a `new SecureRandom(seed)` constructor or a `setSeed(seed)` call, the generator
+# is predictable (CWE-337). Seeds drawn from a method, parameter, or field are not
+# constant here and are not convicted (bounded scope); parse errors are
+# indeterminate.
+
+
+class SeedFlow(enum.StrEnum):
+    CLEAN = "clean"
+    LITERAL_SEEDED = "literal_seeded"
+    INDETERMINATE = "indeterminate"
+
+
+_SEED_LITERAL_TYPES = frozenset(
+    {
+        "string_literal",
+        "decimal_integer_literal",
+        "hex_integer_literal",
+        "octal_integer_literal",
+        "binary_integer_literal",
+        "character_literal",
+        "array_initializer",
+        "array_creation_expression",
+    }
+)
+_SEED_SINK_METHODS = frozenset({"setSeed"})
+
+
+def _is_constant_seed(source: bytes, node: Node | None) -> bool:
+    if node is None:
+        return False
+    if node.type in _SEED_LITERAL_TYPES:
+        return True
+    if node.type == "method_invocation":
+        if _text(source, node.child_by_field_name("name")) == "getBytes":
+            return _is_constant_seed(source, node.child_by_field_name("object"))
+    return False
+
+
+def _is_secure_random_ctor(source: bytes, node: Node) -> bool:
+    return node.type == "object_creation_expression" and "SecureRandom" in _text(
+        source, node.child_by_field_name("type")
+    )
+
+
+def _analyze_seed(source: bytes, method: Node) -> SeedFlow:
+    @dataclass(frozen=True, slots=True)
+    class _Step:
+        position: int
+        kind: str
+        left: str | None = None
+        constant: bool = False
+        alias: str | None = None
+        used_names: frozenset[str] = frozenset()
+
+    steps: list[_Step] = []
+    for node in _walk_method(method):
+        if node.type in {"variable_declarator", "assignment_expression"}:
+            is_decl = node.type == "variable_declarator"
+            left_node = node.child_by_field_name("name" if is_decl else "left")
+            rhs = node.child_by_field_name("value" if is_decl else "right")
+            if left_node is not None and left_node.type == "identifier":
+                steps.append(
+                    _Step(
+                        node.start_byte,
+                        "assign",
+                        left=_text(source, left_node),
+                        constant=_is_constant_seed(source, rhs),
+                        alias=_simple_identifier(source, rhs),
+                    )
+                )
+        elif node.type == "object_creation_expression" and _is_secure_random_ctor(source, node):
+            steps.append(
+                _Step(
+                    node.start_byte,
+                    "sink",
+                    used_names=_identifier_names(source, node.child_by_field_name("arguments")),
+                )
+            )
+        elif node.type == "method_invocation" and (
+            _text(source, node.child_by_field_name("name")) in _SEED_SINK_METHODS
+        ):
+            steps.append(
+                _Step(
+                    node.start_byte,
+                    "sink",
+                    used_names=_identifier_names(source, node.child_by_field_name("arguments")),
+                )
+            )
+
+    tainted: set[str] = set()
+    for step in sorted(steps, key=lambda s: s.position):
+        if step.kind == "sink":
+            if step.used_names & tainted:
+                return SeedFlow.LITERAL_SEEDED
+            continue
+        if step.left is None:
+            continue
+        if step.constant or (step.alias is not None and step.alias in tainted):
+            tainted.add(step.left)
+        else:
+            tainted.discard(step.left)
+    return SeedFlow.CLEAN
+
+
+def classify_seed_provenance(source: str) -> SeedFlow:
+    """Classify constant-seed flow into a randomness source across every method."""
+    source_bytes = source.encode("utf-8")
+    tree = Parser(_LANGUAGE).parse(source_bytes)
+    if tree.root_node.has_error:
+        return SeedFlow.INDETERMINATE
+
+    for node in _walk(tree.root_node):
+        if node.type in {"method_declaration", "constructor_declaration"}:
+            if _analyze_seed(source_bytes, node) is SeedFlow.LITERAL_SEEDED:
+                return SeedFlow.LITERAL_SEEDED
+    return SeedFlow.CLEAN
