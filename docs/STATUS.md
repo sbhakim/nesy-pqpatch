@@ -10,14 +10,14 @@ All commands below were actually run, not assumed:
 
 ```
 ruff check src tests        -> All checks passed!
-mypy                          -> Success: no issues found in 91 source files
-pytest tests/                -> 174 passed
+mypy                          -> Success: no issues found in 95 source files
+pytest tests/                -> 185 passed
 ```
 
 (Earlier in the project this read 64 files / 75 tests, then 67 / 104 after the
 evaluation-robustness upgrades — ADR-004, U-A…U-F; then 82 / 142 after the
-live-pilot fixes below; then 85 / 153 with `PQ-KEY-02` and 88 / 163 with
-`PQ-HYB-02`; the latest increase is the `PQ-RAND-03` L2 rule.)
+live-pilot fixes below; then 85 / 153, 88 / 163, and 91 / 174 as the L2 rules
+landed; the latest increase is the `PQ-PARAM-02` L2 rule.)
 
 External tools used for real (not mocked): `semgrep` 1.169.0, `javac`/`java`
 11.0.31 (system JDK), `git`, `docker` (present, not yet used). **Live local
@@ -36,7 +36,7 @@ were **not** used — a paid, outward-facing call needs explicit authorization.
 | 2 | Rule metadata + fixtures + L1 rules | **Real, reduced count.** **9** L1 rules with fixtures, including `PQ-KEY-01` (unambiguous primitive-family mismatch) and `PQ-RAND-02` (literal-seeded `SecureRandom`). Manuscript Table 3 commits to 14 L1 rules; ambiguous flow remains assigned to L2 rather than guessed at L1. |
 | 3 | Proposer, cache, repair loop | **Real, now exercised on live models.** `Backend` ABC, content-addressed `CacheStore`, `ReplayBackend` test double, `loop.py` implementing Algorithm 1. `backend_c` (local OpenAI-compatible) was driven end-to-end against **Ollama** for the first time — real proposals, cached and reproducible. `backend_a`/`backend_b` (hosted) remain unexercised pending authorization to spend. |
 | Verifier orchestrator | Eq. (1) short-circuit composition | **Real.** `verify_patch()` runs L1, the implemented L2 registry, then L3 by default; L4 remains explicitly excluded, and every `Verdict.layers_evaluated` records the truth. |
-| L2 (dataflow/typestate) | 22 rules per manuscript Table 3 | **Real vertical slice: 4/22**, all on one bounded Tree-sitter Java def-use frontend (ADR-001). `PQ-VER-01` (U3) rejects discarded/dead/overwritten `verify()` results while accepting branch use, ordered aliases, and explicit return. `PQ-KEY-02` (U4) convicts an unambiguous cross-family key flow (ML-KEM key → signature `initSign`/`initVerify`, or ML-DSA/SLH-DSA key → agreement `doPhase`). `PQ-HYB-02` (U6) engages when a method produces both a classical (`generateSecret`) and a PQ (`decapsulate`) shared secret, and convicts when no single expression combines them — the hybrid downgrade L1's token-level `PQ-HYB-01` cannot see. `PQ-RAND-03` (U5) convicts a fixed/literal seed (literal, `"…".getBytes()`, or a fixed byte array) that reaches `SecureRandom` through a variable or alias — the seed provenance L1's `PQ-RAND-02` (literal *directly* in the constructor) cannot see. Across all four: classical/ambiguous literals, interprocedural/non-constant sources, and shadowed redeclarations are deliberately *not* convicted (documented bounded scope); parse errors fail closed. Four load-bearing tests prove the contrast — L1(+L3) accepts what L2 rejects at each of PQ-VER-01, PQ-KEY-02 (L1 defers), PQ-HYB-02 and PQ-RAND-03 (L1's token check passes). This is not the complete promised L2 set; the honest T0/T1 ceiling on this frontend is roughly 8 L2 rules (the rest need a control-flow graph or declared-type resolution). |
+| L2 (dataflow/typestate) | 22 rules per manuscript Table 3 | **Real vertical slice: 5/22**, all on one bounded Tree-sitter Java def-use frontend (ADR-001), together covering five of the seven unsafe classes (U1/U3/U4/U5/U6). `PQ-VER-01` (U3) rejects discarded/dead/overwritten `verify()` results while accepting branch use, ordered aliases, and explicit return. `PQ-KEY-02` (U4) convicts an unambiguous cross-family key flow (ML-KEM key → signature `initSign`/`initVerify`, or ML-DSA/SLH-DSA key → agreement `doPhase`). `PQ-HYB-02` (U6) engages when a method produces both a classical (`generateSecret`) and a PQ (`decapsulate`) shared secret, and convicts when no single expression combines them — the hybrid downgrade L1's token-level `PQ-HYB-01` cannot see. `PQ-RAND-03` (U5) convicts a fixed/literal seed that reaches `SecureRandom` through a variable or alias — the seed provenance L1's `PQ-RAND-02` (literal *directly* in the constructor) cannot see. `PQ-PARAM-02` (U1) convicts a below-floor parameter token that reaches `getInstance` through a variable in the patched source — including a token defined *outside the diff hunks*, which never appears in an added line and is therefore invisible to L1's `PQ-PARAM-01` (rank tables shared in `rules/ranks.py` so the floor comparison cannot drift between layers). Across all five: interprocedural/non-constant sources, fields, parameters, and shadowed redeclarations are deliberately *not* convicted (documented bounded scope); parse errors fail closed. Five load-bearing tests prove the contrast — L1(+L3) accepts what L2 rejects at each rule. This is not the complete promised L2 set; the honest T0/T1 ceiling on this frontend is roughly 8 L2 rules (the rest need a control-flow graph or declared-type resolution). |
 | L3 (build) | Containerized Maven/Gradle + project tests | **Real project build + tests (U-A / ADR-004).** When a `build.yaml` sits above the site, L3 copies the tree, applies the patch (via a content-anchored diff applier that tolerates the wrong line numbers / whitespace real models emit, while refusing to force-apply an ambiguous or unmatched hunk), compiles *all* sources, and runs the project's own test entrypoint; single-file `javac` remains a labelled fallback. Still deferred: third-party dependency resolution and JDK 24 PQC *runtime* (L4's job). Supersedes ADR-002 in part. |
 | L4 (conformance) | Round-trip + ACVP KATs + tri-stack interop | **Not implemented.** Real interfaces in `roundtrip.py`/`acvp.py`/`interop.py`, all raise `NotImplementedError`. Requires `containers/crypto-tools` and pinned ACVP vectors, neither built this session. |
 | Trace + metrics | Canonical hashing, attestation, RUA/Wilson/McNemar | **Real.** Golden-bytes-tested canonical JSON, working tamper detection (a mutated field is correctly detected), optional ML-DSA signing behind a guarded import (`liboqs-python` not installed; raises a clear error, not a silent no-op). Every metric verified against hand-computed reference values, not just round-trip tests. |
@@ -117,12 +117,13 @@ gap. No paper-scale numbers exist; the manuscript's `XX.X%` remain placeholders.
 
 ## What a future session should do first
 
-1. Four L2 rules now anchor the slice (4/22: `PQ-VER-01`, `PQ-KEY-02`,
-   `PQ-HYB-02`, `PQ-RAND-03`), each decided by the same bounded intraprocedural
-   def-use — roughly half the ~8-rule T0/T1 ceiling. The remaining T0/T1
-   candidates are a second `verify()`-shape (U3) and a parameter-via-variable
-   floor rule (U1). Beyond those, U7 fail-open and the U2 reachability rules need
-   an intraprocedural CFG, and most of U4's remainder needs declared-type
+1. Five L2 rules now anchor the slice (5/22: `PQ-VER-01`, `PQ-KEY-02`,
+   `PQ-HYB-02`, `PQ-RAND-03`, `PQ-PARAM-02`), each decided by the same bounded
+   intraprocedural def-use and together covering U1/U3/U4/U5/U6. The remaining
+   T0/T1 candidates before the ceiling (~8) are a second `verify()`-shape (U3),
+   a `setSeed`-ordering variant (U5), and a second hybrid combiner shape (U6).
+   Beyond those, U7 fail-open and the U2 reachability rules need an
+   intraprocedural CFG, and most of U4's remainder needs declared-type
    resolution — those are project-level decisions, not per-rule spikes. Record any
    such requirement in ADR-001 before building.
 2. Grow the L1 rule set from 9 to the manuscript's committed 14 (or edit the

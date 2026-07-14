@@ -1,7 +1,7 @@
 # ADR-001: L2 dataflow/typestate engine selection
 
-**Status:** accepted; structural frontend adopted; 4 T0 rules shipped (PQ-VER-01 U3, PQ-KEY-02 U4, PQ-HYB-02 U6, PQ-RAND-03 U5)
-**Date:** 2026-07-11 (opened); 2026-07-12 (decision); 2026-07-13 (frontend revision + PQ-KEY-02 spike + PQ-HYB-02 + PQ-RAND-03)
+**Status:** accepted; structural frontend adopted; 5 T0 rules shipped covering U1/U3/U4/U5/U6 (PQ-VER-01, PQ-KEY-02, PQ-HYB-02, PQ-RAND-03, PQ-PARAM-02)
+**Date:** 2026-07-11 (opened); 2026-07-12 (decision); 2026-07-13 (frontend revision + the five T0 rules)
 
 ## Context
 
@@ -78,19 +78,26 @@ algorithm tokens can be present while the flow still drops one secret).
 `PQ-RAND-03` (U5, 2026-07-13) is the same shape once more: a constant seed
 (literal, fixed byte array, or `"…".getBytes()`) tainting a variable that reaches
 `SecureRandom`, catching the seed provenance L1's `PQ-RAND-02` cannot follow past
-a direct literal. Four T0 rules now cover U3/U4/U5/U6. The honest ceiling for this
-bounded frontend is roughly 8 L2 rules; the U7 and U2 reachability rules need an
-intraprocedural control-flow graph and the U4 tail needs declared-type
-resolution -- a project-level frontend decision, not another per-rule spike.
+a direct literal. `PQ-PARAM-02` (U1, 2026-07-13) closes the last purely
+structural gap: a below-floor parameter token reaching `getInstance` through a
+variable -- including a token defined *outside the diff hunks*, which never
+appears in an added line and is therefore invisible to L1's token scan by
+construction. Its rank comparison shares one table with PQ-PARAM-01
+(`verifier/rules/ranks.py`) so the two layers cannot drift. Five T0 rules now
+cover U1/U3/U4/U5/U6. The honest ceiling for this bounded frontend is roughly
+8 L2 rules; the U7 and U2 reachability rules need an intraprocedural control-flow
+graph and the U4 tail needs declared-type resolution -- a project-level frontend
+decision, not another per-rule spike.
 
 ## Consequences
 
 - Verdicts produced under the default configuration now include
   `Layer.L2_DATAFLOW`; configurations that remove L2 remain explicit ablations.
-- The current L2 count is **4 of the planned 22** (`PQ-VER-01`, `PQ-KEY-02`,
-  `PQ-HYB-02`, `PQ-RAND-03`), each decided by the same bounded intraprocedural
-  def-use. No result may describe this vertical slice as the complete L2 rule set.
-- Four regression tests demonstrate the intended scientific contrast. (a) A patch
+- The current L2 count is **5 of the planned 22** (`PQ-VER-01`, `PQ-KEY-02`,
+  `PQ-HYB-02`, `PQ-RAND-03`, `PQ-PARAM-02`), each decided by the same bounded
+  intraprocedural def-use. No result may describe this vertical slice as the
+  complete L2 rule set.
+- Five regression tests demonstrate the intended scientific contrast. (a) A patch
   that discards `verify()`, compiles, and passes the seed project's tests is
   accepted by L1+L3 but rejected by L2 as `PQ-VER-01`. (b) A migration that puts
   both algorithm families in scope makes L1's `PQ-KEY-01` *defer*, so L1 accepts,
@@ -100,8 +107,11 @@ resolution -- a project-level frontend decision, not another per-rule spike.
   because the flow feeds only one shared secret to the KDF. (d) A migration that
   routes a literal seed through a variable into `SecureRandom` passes L1's
   `PQ-RAND-02` (which only sees a literal directly in the constructor), while
-  L1+L2 rejects it as `PQ-RAND-03`. Each is the "beyond tokens" L1->L2 escalation
-  boundary, made executable.
+  L1+L2 rejects it as `PQ-RAND-03`. (e) A migration that reuses a pre-existing
+  below-floor algorithm constant defined outside the diff passes L1's
+  `PQ-PARAM-01` token scan (no token in any added line), while L1+L2 rejects it
+  as `PQ-PARAM-02`. Each is the "beyond tokens" L1->L2 escalation boundary, made
+  executable.
 - Runtime dependencies are bounded to `tree-sitter` 0.26.x and
   `tree-sitter-java` 0.23.x in `pyproject.toml`; CI installs them through the
   normal package installation path.
