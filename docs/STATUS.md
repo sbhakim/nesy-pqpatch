@@ -10,14 +10,17 @@ All commands below were actually run, not assumed:
 
 ```
 ruff check src tests        -> All checks passed!
-mypy                          -> Success: no issues found in 95 source files
-pytest tests/                -> 189 passed
+mypy                          -> Success: no issues found in 116 source files
+pytest tests/                -> 220 passed
 ```
 
 (Earlier in the project this read 64 files / 75 tests, then 67 / 104 after the
 evaluation-robustness upgrades — ADR-004, U-A…U-F; then 82 / 142 after the
 live-pilot fixes below; then 85 / 153 through 95 / 185 as the five L2 rules
-landed; the latest increase is Tier-2 app #2, `secure-archive-tool`.)
+landed, and 189 with Tier-2 app #2; the latest increase is the seven L1 rules
+that complete the class-mapped L1 set. mypy's file tally counts its build set,
+which includes followed imports, so it moves with cache state as well as with
+repo growth.)
 
 External tools used for real (not mocked): `semgrep` 1.169.0, `javac`/`java`
 11.0.31 (system JDK), `git`, `docker` (present, not yet used). **Live local
@@ -33,7 +36,7 @@ were **not** used — a paid, outward-facing call needs explicit authorization.
 |---|---|---|
 | 0 | Skeleton, pyproject, CI, `model.py` | **Real.** Package installs editable, imports, CLI runs. |
 | 1 | Detector + Tier-2 apps | **Real, now two apps.** Semgrep pack (4 rules) + `classify.py` verified against `corpus/tier2/file-signing-cli` *and* `corpus/tier2/secure-archive-tool` (added 2026-07-14): each seeds 7 sites (6 detectable + 1 deliberate miss), precision 100%, recall 6/6 detectable per app. App #2 deliberately varies the surface — a Java **package** (nested build, dotted `archive.ArchiveTests` entrypoint), different classical algorithms (DSA/ECDSA/DH/RSA-PKCS1), and a different hard-site mechanism (concatenated algorithm string vs. app #1's config lookup). Ground-truth lines were confirmed against a real detector run, not hand-counted (lesson from bug #6 below). Two L3 probes prove project mode handles the packaged tree: a benign migration passes build+tests, and a compiling API-break is caught only by the project's own reflective suite. |
-| 2 | Rule metadata + fixtures + L1 rules | **Real, reduced count.** **9** L1 rules with fixtures, including `PQ-KEY-01` (unambiguous primitive-family mismatch) and `PQ-RAND-02` (literal-seeded `SecureRandom`). Manuscript Table 3 commits to 14 L1 rules; ambiguous flow remains assigned to L2 rather than guessed at L1. |
+| 2 | Rule metadata + fixtures + L1 rules | **Real, complete at L1: 16 rules** (2026-07-14) — the 14 class-mapped rules Table 3 commits to, plus the two cross-cutting rules (`PQ-SCOPE-01` diff scope, `PQ-MIG-01` migration obligation) the table does not yet count. The seven newest: `PQ-PARAM-03` (SLH-DSA floor, own FIPS-205 token grammar in `rules/ranks.py`), `PQ-PARAM-04` (hallucinated/nonstandard parameter sets — invalid, not merely unranked), `PQ-PARAM-05` (classical key-size downgrade ≤1024 bits), `PQ-FALL-03` (runtime classical/PQ ternary toggle — a reachable classical path with no catch involved), `PQ-FALL-04` (getInstance inside a catch: downgrade-on-failure even PQ→PQ), `PQ-EXC-01` (catch returns `true`: failure becomes success, CWE-636), `PQ-EXC-02` (log-only catch swallow, CWE-390). Every rule ships passing+violating fixtures plus false-positive boundary tests (EC curve sizes not convicted; PQ/PQ ternaries not convicted; log-then-rethrow not convicted; `return false` fails closed and passes). Ambiguous flow properties remain L2, never token-approximated. |
 | 3 | Proposer, cache, repair loop | **Real, now exercised on live models.** `Backend` ABC, content-addressed `CacheStore`, `ReplayBackend` test double, `loop.py` implementing Algorithm 1. `backend_c` (local OpenAI-compatible) was driven end-to-end against **Ollama** for the first time — real proposals, cached and reproducible. `backend_a`/`backend_b` (hosted) remain unexercised pending authorization to spend. |
 | Verifier orchestrator | Eq. (1) short-circuit composition | **Real.** `verify_patch()` runs L1, the implemented L2 registry, then L3 by default; L4 remains explicitly excluded, and every `Verdict.layers_evaluated` records the truth. |
 | L2 (dataflow/typestate) | 22 rules per manuscript Table 3 | **Real vertical slice: 5/22**, all on one bounded Tree-sitter Java def-use frontend (ADR-001), together covering five of the seven unsafe classes (U1/U3/U4/U5/U6). `PQ-VER-01` (U3) rejects discarded/dead/overwritten `verify()` results while accepting branch use, ordered aliases, and explicit return. `PQ-KEY-02` (U4) convicts an unambiguous cross-family key flow (ML-KEM key → signature `initSign`/`initVerify`, or ML-DSA/SLH-DSA key → agreement `doPhase`). `PQ-HYB-02` (U6) engages when a method produces both a classical (`generateSecret`) and a PQ (`decapsulate`) shared secret, and convicts when no single expression combines them — the hybrid downgrade L1's token-level `PQ-HYB-01` cannot see. `PQ-RAND-03` (U5) convicts a fixed/literal seed that reaches `SecureRandom` through a variable or alias — the seed provenance L1's `PQ-RAND-02` (literal *directly* in the constructor) cannot see. `PQ-PARAM-02` (U1) convicts a below-floor parameter token that reaches `getInstance` through a variable in the patched source — including a token defined *outside the diff hunks*, which never appears in an added line and is therefore invisible to L1's `PQ-PARAM-01` (rank tables shared in `rules/ranks.py` so the floor comparison cannot drift between layers). Across all five: interprocedural/non-constant sources, fields, parameters, and shadowed redeclarations are deliberately *not* convicted (documented bounded scope); parse errors fail closed. Five load-bearing tests prove the contrast — L1(+L3) accepts what L2 rejects at each rule. This is not the complete promised L2 set; the honest T0/T1 ceiling on this frontend is roughly 8 L2 rules (the rest need a control-flow graph or declared-type resolution). |
@@ -126,8 +129,11 @@ gap. No paper-scale numbers exist; the manuscript's `XX.X%` remain placeholders.
    intraprocedural CFG, and most of U4's remainder needs declared-type
    resolution — those are project-level decisions, not per-rule spikes. Record any
    such requirement in ADR-001 before building.
-2. Grow the L1 rule set from 9 to the manuscript's committed 14 (or edit the
-   committed count in the same commit if it changes).
+2. ~~Grow the L1 rule set to the manuscript's committed 14.~~ Done 2026-07-14
+   (16 including the two cross-cutting rules). What remains on the rule front is
+   the L2 side of the freeze: finish the ~3 remaining T0 L2 shapes, then update
+   the manuscript's committed counts in one pass so the paper claims exactly
+   what the artifact ships.
 3. Add the remaining four Tier-2 reference applications (2 of 6 exist) — each
    with a `build.yaml` and a real test suite so project-mode L3 applies to all
    of them, and each varying the surface (build shape, algorithms, miss
