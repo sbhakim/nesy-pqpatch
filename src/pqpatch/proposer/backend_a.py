@@ -10,7 +10,6 @@ import httpx
 from pqpatch.proposer.base import Backend
 from pqpatch.settings import Settings
 
-_DEFAULT_BASE_URL = "https://api.openai.com/v1"
 _DEFAULT_MODEL = "gpt-5.1"
 
 
@@ -26,7 +25,7 @@ class BackendA(Backend):
         settings: Settings,
         *,
         model: str = _DEFAULT_MODEL,
-        base_url: str = _DEFAULT_BASE_URL,
+        base_url: str | None = None,
         cache: object | None = None,
     ) -> None:
         super().__init__(settings, cache=cache)  # type: ignore[arg-type]
@@ -37,7 +36,8 @@ class BackendA(Backend):
             )
         self._api_key = settings.backend_a_api_key
         self.model_version = model
-        self._base_url = base_url
+        # Explicit arg wins; otherwise the env-configured endpoint (settings).
+        self._base_url = base_url or settings.backend_a_base_url
 
     def _generate_raw(
         self, prompt: str, *, seed: int, site_id: str, attempt: int

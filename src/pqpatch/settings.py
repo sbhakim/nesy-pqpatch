@@ -21,6 +21,9 @@ class Settings:
     backend_a_api_key: str | None
     backend_b_api_key: str | None
     backend_c_base_url: str
+    # OpenAI-compatible endpoint for backend A. Defaults to OpenAI; point it at
+    # any compatible host (e.g. https://api.deepseek.com) via the env var.
+    backend_a_base_url: str = "https://api.openai.com/v1"
 
     @classmethod
     def load(cls) -> Settings:
@@ -40,6 +43,9 @@ class Settings:
             backend_b_api_key=os.environ.get("PQPATCH_BACKEND_B_API_KEY"),
             backend_c_base_url=os.environ.get(
                 "PQPATCH_BACKEND_C_BASE_URL", "http://localhost:8000/v1"
+            ),
+            backend_a_base_url=os.environ.get(
+                "PQPATCH_BACKEND_A_BASE_URL", "https://api.openai.com/v1"
             ),
         )
 
