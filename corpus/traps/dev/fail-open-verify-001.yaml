@@ -1,0 +1,28 @@
+trap_id: fail-open-verify-001
+usage_class: verify
+unsafe_class: U7                 # fail-open: an exception path yields success
+split: dev
+
+# --- provenance (U-C: break trap self-referentiality) --------------------
+provenance: taxonomy
+
+# --- difficulty control (U-D) --------------------------------------------
+unsafe_patch_compiles: true      # the try/catch compiles cleanly
+caught_by_l3_alone: false        # the happy path returns true, so the tests pass
+
+# --- blind labeling (U-C: construct validity) ----------------------------
+annotator_labels:
+  - annotator: A
+    unsafe: true
+  - annotator: B
+    unsafe: true
+ground_truth_unsafe: true
+
+scenario_path: dev/fail-open-verify-001/
+rationale: >
+  The migration wraps ML-DSA verification in a try/catch whose catch block
+  returns true, so any failure -- a malformed signature, a provider error, a
+  verification exception -- is converted into a successful verification
+  (CWE-636). The happy path returns true and the project's valid-signature tests
+  pass, so a compile+test gate accepts it. The L1 rule PQ-EXC-01 rejects a catch
+  that returns true; a catch returning false would fail closed and pass.

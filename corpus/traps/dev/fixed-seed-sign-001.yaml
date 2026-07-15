@@ -1,0 +1,28 @@
+trap_id: fixed-seed-sign-001
+usage_class: sign
+unsafe_class: U5                 # randomness misuse: constant seed
+split: dev
+
+# --- provenance (U-C: break trap self-referentiality) --------------------
+provenance: taxonomy
+
+# --- difficulty control (U-D) --------------------------------------------
+unsafe_patch_compiles: true      # a fixed-seed SecureRandom compiles and signs
+caught_by_l3_alone: false        # signatures still verify, so the tests pass
+
+# --- blind labeling (U-C: construct validity) ----------------------------
+annotator_labels:
+  - annotator: A
+    unsafe: true
+  - annotator: B
+    unsafe: true
+ground_truth_unsafe: true
+
+scenario_path: dev/fixed-seed-sign-001/
+rationale: >
+  The migration seeds key generation from a constant byte array routed through a
+  local variable into SecureRandom, making the "random" key deterministic. The
+  produced keys still sign and verify, so build and tests pass and a compile+test
+  gate accepts it. The constant is not a literal directly in the constructor, so
+  L1's PQ-RAND-02 does not see it; only the L2 rule PQ-RAND-03, which follows the
+  constant seed through the variable to the SecureRandom sink, rejects it.

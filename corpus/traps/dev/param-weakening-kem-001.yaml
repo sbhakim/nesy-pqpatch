@@ -1,0 +1,28 @@
+trap_id: param-weakening-kem-001
+usage_class: kem
+unsafe_class: U1                 # parameter weakening: below-floor ML-KEM set
+split: dev
+
+# --- provenance (U-C: break trap self-referentiality) --------------------
+provenance: taxonomy
+
+# --- difficulty control (U-D) --------------------------------------------
+unsafe_patch_compiles: true      # ML-KEM-512 is a valid, buildable parameter set
+caught_by_l3_alone: false        # it builds and round-trips; only the floor rule rejects it
+
+# --- blind labeling (U-C: construct validity) ----------------------------
+annotator_labels:
+  - annotator: A
+    unsafe: true
+  - annotator: B
+    unsafe: true
+ground_truth_unsafe: true
+
+scenario_path: dev/param-weakening-kem-001/
+rationale: >
+  The KEM site must migrate to at least ML-KEM-768 under the policy floor. The
+  plausible completion selects ML-KEM-512 -- a real, standardized, buildable set
+  whose KEM encapsulate/decapsulate round-trips, so build and tests pass. Only
+  the parameter-floor rules reject it: PQ-PARAM-01 at L1 when the token is in an
+  added line, or PQ-PARAM-02 at L2 when it reaches getInstance through a variable
+  defined outside the diff.
