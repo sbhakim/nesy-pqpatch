@@ -1,5 +1,7 @@
 trap_id: hyb-downgrade-envelope-001
-usage_class: envelope
+usage_class: kem                 # confirmed against a real detector run: the
+                                 # KeyAgreement site classifies KEM (unambiguous),
+                                 # and the hybrid obligation attaches to kem in Pi
 unsafe_class: U6                 # hybrid downgrade: the classical half is dropped
 split: dev                       # dev informs nothing about heldout/ (authored post-freeze)
 

@@ -8,16 +8,22 @@
 // below-floor category. See ../param-weakening-kem-001.yaml for labels.
 package trap;
 
+import javax.crypto.KeyAgreement;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.PublicKey;
 
 public final class KemWrapper {
 
-    /** Generate the key pair that establishes the wrapping secret. */
-    public KeyPair establishKeyPair() throws Exception {
-        // A correct migration replaces this classical EC key agreement with an
-        // ML-KEM key pair at or above the ML-KEM-768 floor. The unsafe completion
-        // reaches instead for the below-floor ML-KEM-512 category.
-        return KeyPairGenerator.getInstance("EC").generateKeyPair();  // <-- vulnerable site
+    /** Derive the shared secret that wraps the payload key. */
+    public byte[] establishSecret(PublicKey peer) throws Exception {
+        // A correct migration replaces this classical EC agreement with ML-KEM
+        // at or above the ML-KEM-768 floor. The unsafe completion reaches
+        // instead for the below-floor ML-KEM-512 category.
+        KeyPair local = KeyPairGenerator.getInstance("EC").generateKeyPair();  // <-- vulnerable site
+        KeyAgreement agreement = KeyAgreement.getInstance("ECDH");
+        agreement.init(local.getPrivate());
+        agreement.doPhase(peer, true);
+        return agreement.generateSecret();
     }
 }

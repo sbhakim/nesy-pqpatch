@@ -86,6 +86,67 @@ def _pct(est: Estimate) -> str:
     return f"{100 * est.point:.1f}\\% [{100 * est.ci_low:.1f}, {100 * est.ci_high:.1f}]"
 
 
+def trap_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
+    """Mechanical trap-run summary (see eval/trap_run.py for what these fields
+    deliberately do not claim: bait is a lower bound, RUA needs adjudication)."""
+    scored = [r for r in records if r.get("full_status") != "error"]
+    n = len(scored)
+    if n == 0:
+        raise ValueError("no non-error trap records to summarize")
+
+    caught = [r for r in scored if r["full_status"] != "accept"]
+    by_layer: dict[str, int] = {}
+    for rec in caught:
+        layer = rec.get("full_catch_layer") or "none"
+        by_layer[layer] = by_layer.get(layer, 0) + 1
+
+    return {
+        "n": n,
+        "n_error": len(records) - n,
+        "caught": wilson_ci(len(caught), n),
+        "bait_confirmed": wilson_ci(sum(1 for r in scored if r.get("bait_taken_confirmed")), n),
+        "l3_only_accept": wilson_ci(
+            sum(1 for r in scored if r.get("l3_only_status") == "accept"), n
+        ),
+        "symbolic_exclusive": wilson_ci(
+            sum(1 for r in scored if r.get("symbolic_exclusive")), n
+        ),
+        "needs_adjudication": sum(1 for r in scored if r.get("needs_adjudication")),
+        "l3_apply_failures": sum(1 for r in scored if r.get("l3_reject_was_apply_failure")),
+        "catch_by_layer": by_layer,
+    }
+
+
+def _emit_trap_run(run: dict[str, Any]) -> None:
+    man = run["manifest"]
+    records = run["records"]
+    print(
+        f"\n=== trap-run {man['config_hash']} :: {man['backend_id']} / "
+        f"{man['model_version']} on {man['corpus_id']} (seeds={man['seeds']}) ==="
+    )
+    ts = trap_summary(records)
+    print(f"traps scored: {ts['n']}  ({ts['n_error']} error)")
+    print(f"  caught by full verifier      : {_pct(ts['caught'])}")
+    print(f"  bait-take (confirmed, >=)    : {_pct(ts['bait_confirmed'])}")
+    print(f"  L3-only gate would accept    : {_pct(ts['l3_only_accept'])}")
+    print(f"  symbolic-exclusive catches   : {_pct(ts['symbolic_exclusive'])}")
+    print(
+        f"  L3 rejections from apply-fail: {ts['l3_apply_failures']} "
+        "(unapplyable diff, not the build gate seeing the flaw)"
+    )
+    print(f"  catch by layer               : {ts['catch_by_layer']}")
+    print(
+        f"  ACCEPTED -> adjudication queue: {ts['needs_adjudication']} "
+        "(RUA is claimable only after these are human-labeled)"
+    )
+    for rec in records:
+        if rec.get("needs_adjudication"):
+            print(
+                f"    - {rec['trap_id']} (claims {rec.get('claimed_primitive')!r}; "
+                f"diff in runs/{man['config_hash']}/sites/)"
+            )
+
+
 def _emit_run(run: dict[str, Any]) -> None:
     man = run["manifest"]
     records = run["records"]
@@ -131,7 +192,10 @@ def main() -> int:
         )
         return 1
     for run in runs:
-        _emit_run(run)
+        if run["manifest"].get("kind") == "trap-run":
+            _emit_trap_run(run)
+        else:
+            _emit_run(run)
     return 0
 
 
