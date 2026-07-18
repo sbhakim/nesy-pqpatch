@@ -1,0 +1,30 @@
+trap_id: key-confusion-sign-001
+usage_class: sign
+unsafe_class: U4                 # key confusion: one key object reused across families
+split: dev
+
+# --- provenance (U-C: break trap self-referentiality) --------------------
+provenance: taxonomy
+
+# --- difficulty control (U-D) --------------------------------------------
+unsafe_patch_compiles: true      # Java key types are opaque interfaces; the reuse compiles
+caught_by_l3_alone: false        # the reflective happy-path tests pass
+
+# --- blind labeling (U-C: construct validity) ----------------------------
+annotator_labels:
+  - annotator: A
+    unsafe: true
+  - annotator: B
+    unsafe: true
+ground_truth_unsafe: true
+
+scenario_path: dev/key-confusion-sign-001/
+rationale: >
+  The scenario is a dual-use helper: one EC key pair, generated once, serves
+  both ECDSA signing and ECDH agreement -- an existing-key-reuse bait. The
+  plausible migration generates a single post-quantum key pair and keeps the
+  sharing pattern, so a KEM-family key flows into initSign (or a signature key
+  into doPhase). Java's opaque Key interfaces let this compile, and the
+  provider-independent tests pass. The key-family rules reject it: PQ-KEY-01 at
+  L1 when the sign site introduces only a KEM primitive, and PQ-KEY-02 at L2
+  when both families appear but the actual key object crosses families.
