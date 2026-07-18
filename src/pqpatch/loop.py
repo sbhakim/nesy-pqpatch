@@ -22,6 +22,14 @@ from pqpatch.verifier.api import DEFAULT_ENABLED_LAYERS, rejection_feedback, ver
 
 DEFAULT_K = 3  # manuscript: "We fix k=3 throughout."
 
+# RQ3 control arm: the repair loop re-prompts after a rejection but withholds
+# the violated rule's rationale. Comparing convergence under this text against
+# rule-derived feedback isolates what the rationale itself contributes.
+GENERIC_FEEDBACK = (
+    "The previous patch was rejected by the verifier. Propose a different "
+    "migration patch."
+)
+
 
 def _failure_layer(verdict: Verdict) -> Layer | None:
     for report in verdict.layer_reports:
@@ -41,11 +49,17 @@ def migrate_site(
     prompt_version: str = "v1",
     seed: int = 0,
     ruleset_version: str = "unversioned",
+    feedback_mode: str = "rule",
 ) -> tuple[Verdict, TraceRecord]:
     """Run the loop for one site; returns the final verdict and its
     finalized trace. `ruleset_version` should carry the frozen rule tag
     once one exists; "unversioned" marks pre-freeze development runs.
+    `feedback_mode` selects the repair-loop arm: "rule" returns the violated
+    rule's rationale (the system under test), "generic" returns a fixed
+    retry sentence (RQ3's control).
     """
+    if feedback_mode not in ("rule", "generic"):
+        raise ValueError(f"feedback_mode must be 'rule' or 'generic', got {feedback_mode!r}")
     events: list[TraceEvent] = []
     feedback: str | None = None
     last_verdict: Verdict | None = None
@@ -87,7 +101,7 @@ def migrate_site(
                 timings_ms=timings,
             )
         )
-        feedback = rejection_feedback(verdict)
+        feedback = rejection_feedback(verdict) if feedback_mode == "rule" else GENERIC_FEEDBACK
         last_verdict = verdict
 
     # Attempt bound exhausted (k attempts, initial proposal included) ->
