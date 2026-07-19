@@ -1,0 +1,11 @@
+case_id: ecdh-agreement
+source: CryptoAPI-Bench-derived (quantum-vulnerable key agreement)
+usage_class: kem
+vulnerable_primitives: ["EC", "ECDH"]
+reference_target: ML-KEM-768 (hybrid with the retained classical agreement)
+required_rules: ["PQ-PARAM-01", "PQ-HYB-01", "PQ-HYB-02", "PQ-KEY-02", "PQ-MIG-01"]
+notes: >
+  KEM sites carry a hybrid obligation (policy Pi: hybrid_required[kem]=true).
+  A correct migration adds an ML-KEM encapsulation and combines both shared
+  secrets through a KDF; dropping either half, or letting a KEM key reach a
+  signature op, is unsafe (PQ-HYB-*/PQ-KEY-02).

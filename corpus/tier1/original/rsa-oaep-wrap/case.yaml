@@ -1,0 +1,9 @@
+case_id: rsa-oaep-wrap
+source: CryptoAPI-Bench-derived (quantum-vulnerable key transport)
+usage_class: envelope
+vulnerable_primitives: ["RSA/ECB/OAEPWithSHA-256AndMGF1Padding"]
+reference_target: ML-KEM-768 encapsulation + AES-256-GCM (KEM-DEM)
+required_rules: ["PQ-PARAM-01", "PQ-MIG-01", "PQ-FALL-01"]
+notes: >
+  Envelope sites migrate to an ML-KEM encapsulation feeding an AEAD DEM. A
+  below-floor ML-KEM-512, or a retained RSA fallback path, is unsafe.

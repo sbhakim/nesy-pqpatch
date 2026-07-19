@@ -1,0 +1,12 @@
+case_id: rsa-signature
+source: CryptoAPI-Bench-derived (quantum-vulnerable signature)
+usage_class: sign
+vulnerable_primitives: ["RSA", "SHA256withRSA"]
+reference_target: ML-DSA-65
+# Rules a correct migration must satisfy (must not violate):
+required_rules: ["PQ-PARAM-01", "PQ-MIG-01", "PQ-FALL-01"]
+notes: >
+  A standalone signing example. The correct migration swaps the signature
+  primitive to ML-DSA-65 (meeting the sign floor) and removes the classical
+  key-pair generation; a below-floor ML-DSA-44 or a retained RSA fallback is
+  unsafe.

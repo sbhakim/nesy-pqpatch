@@ -1,0 +1,10 @@
+case_id: ecdsa-verify
+source: CryptoAPI-Bench-derived (quantum-vulnerable verification)
+usage_class: verify
+vulnerable_primitives: ["SHA256withECDSA"]
+reference_target: ML-DSA-65
+required_rules: ["PQ-PARAM-01", "PQ-VER-01", "PQ-MIG-01"]
+notes: >
+  The correct migration swaps to ML-DSA-65 and preserves use of the verify()
+  boolean (governs control flow or is returned). Discarding the result, or
+  OR-ing it into a bypassable branch, is unsafe (PQ-VER-01/02).
