@@ -1,0 +1,47 @@
+# Ground truth for Tier-2 reference app #5 (token-broker).
+# Consumed by tests/integration/test_tier2_broker.py and eval/detection.py
+# to compute detector precision/recall (RQ0).
+#
+# Line numbers were confirmed against a REAL detector run, not hand-counted
+# (the sites.yaml lesson, docs/STATUS.md bug #6). The deliberate miss is
+# mechanism #5: the algorithm is a private helper method's RETURN VALUE, so
+# the getInstance argument is a method call -- neither a literal nor a
+# foldable constant, and thus invisible to the literal-matching pack.
+
+app: token-broker
+file: src/broker/TokenCrypto.java
+
+sites:
+  - line: 30
+    usage_class: sign           # KeyPairGenerator("RSA") 2048; no agreement in window
+    detectable: true
+
+  - line: 37
+    usage_class: sign           # Signature("SHA1withRSA") + initSign
+    detectable: true
+
+  - line: 45
+    usage_class: verify         # Signature("SHA256withECDSA") + initVerify
+    detectable: true
+
+  - line: 53
+    usage_class: verify         # true class if it were detectable; algorithm is
+    detectable: false           # Signature.getInstance(negotiatedScheme()) -- a
+    note: method-return-value algorithm; expected detector miss (mechanism 5)
+
+  - line: 61
+    usage_class: kem            # KeyPairGenerator("EC") feeding the X25519 agreement
+    detectable: true            # within the classifier's forward window
+
+  - line: 68
+    usage_class: kem            # KeyAgreement("X25519") -- unambiguous KEM
+    detectable: true
+
+  - line: 76
+    usage_class: envelope       # Cipher("RSA/ECB/OAEP...") session-key wrap
+    detectable: true
+
+counts:
+  total_sites: 7
+  detectable: 6
+  expected_miss: 1
