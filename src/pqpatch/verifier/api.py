@@ -23,7 +23,7 @@ from pqpatch.model import (
     Verdict,
     VerdictStatus,
 )
-from pqpatch.verifier import l3_build
+from pqpatch.verifier import l1_stock, l3_build
 from pqpatch.verifier.l4_conformance import check as l4_check
 from pqpatch.verifier.rules.registry import rules_by_layer
 from pqpatch.verifier.rules.spec import RuleOutcome
@@ -103,8 +103,16 @@ def _run_single_check_layer(
     return LayerReport(layer=layer, results=(result,), duration_ms=duration_ms)
 
 
-def _run_layer(layer: Layer, patch: Patch, site: Site, policy: Policy) -> LayerReport:
+def _run_layer(
+    layer: Layer, patch: Patch, site: Site, policy: Policy, *, l1_mode: str = "pq"
+) -> LayerReport:
     if layer == Layer.L1_SYNTACTIC:
+        if l1_mode == "stock":
+            # RQ4 ablation arm: the classical-era scanner pack replaces the PQ
+            # rule registry. Never the shipping configuration.
+            return _run_single_check_layer(
+                layer, l1_stock.check, patch, site, policy, rule_id="<L1-stock-classical>"
+            )
         return _run_rule_registry_layer(layer, patch, site, policy)
     if layer == Layer.L2_DATAFLOW:
         return _run_rule_registry_layer(layer, patch, site, policy)
@@ -139,9 +147,14 @@ def verify_patch(
     policy: Policy,
     *,
     enabled_layers: frozenset[Layer] = DEFAULT_ENABLED_LAYERS,
+    l1_mode: str = "pq",
 ) -> Verdict:
     """Accept iff every enabled layer passes; otherwise reject at the first
-    layer that does not."""
+    layer that does not. `l1_mode` selects the L1 arm: "pq" is the shipping
+    rule registry; "stock" swaps in the classical-era scanner pack (RQ4
+    ablation only)."""
+    if l1_mode not in ("pq", "stock"):
+        raise ValueError(f"l1_mode must be 'pq' or 'stock', got {l1_mode!r}")
     layer_reports: list[LayerReport] = []
     layers_evaluated: list[Layer] = []
 
@@ -150,7 +163,7 @@ def verify_patch(
             layer_reports.append(_skipped_report(layer))
             continue
 
-        report = _run_layer(layer, patch, site, policy)
+        report = _run_layer(layer, patch, site, policy, l1_mode=l1_mode)
         layer_reports.append(report)
         layers_evaluated.append(layer)
 

@@ -182,7 +182,51 @@ def _emit_run(run: dict[str, Any]) -> None:
     print(f"LaTeX funnel row: {man['backend_id']} & {row} \\\\")
 
 
-def main() -> int:
+def write_latex(runs: list[dict[str, Any]], out_dir: Path) -> list[Path]:
+    """Write one .tex fragment per table family, rows generated only from
+    manifests. Returned paths are what a manuscript results pass would \\input;
+    a backend with no run simply has no row -- absence is visible, never
+    invented."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    funnel_rows: list[str] = []
+    trap_rows: list[str] = []
+    for run in runs:
+        man = run["manifest"]
+        if man.get("kind") == "trap-run":
+            ts = trap_summary(run["records"])
+            trap_rows.append(
+                f"% run {man['config_hash']} ({man['model_version']}, adjudication "
+                f"pending on {ts['needs_adjudication']} accepts)\n"
+                f"{man['backend_id']} & {100 * ts['bait_confirmed'].point:.1f} & "
+                f"{100 * ts['l3_only_accept'].point:.1f} & "
+                f"{100 * (1 - ts['caught'].point):.1f} \\\\"
+            )
+        else:
+            fn = funnel(run["records"])
+            cells = " & ".join(
+                f"{100 * fn[key].point:.1f}"
+                for key in ("survive_l1", "survive_l2", "accept_first", "accept_final")
+            )
+            funnel_rows.append(
+                f"% run {man['config_hash']} ({man['model_version']} on {man['app']})\n"
+                f"{man['backend_id']} & {cells} \\\\"
+            )
+
+    written: list[Path] = []
+    for name, rows in (("funnel_rows.tex", funnel_rows), ("trap_rows.tex", trap_rows)):
+        if rows:
+            path = out_dir / name
+            path.write_text("\n".join(rows) + "\n")
+            written.append(path)
+    return written
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    latex_dir: Path | None = None
+    if "--latex-dir" in args:
+        latex_dir = Path(args[args.index("--latex-dir") + 1])
+
     runs = load_runs()
     if not runs:
         print(
@@ -196,6 +240,9 @@ def main() -> int:
             _emit_trap_run(run)
         else:
             _emit_run(run)
+    if latex_dir is not None:
+        for path in write_latex(runs, latex_dir):
+            print(f"wrote {path}")
     return 0
 
 

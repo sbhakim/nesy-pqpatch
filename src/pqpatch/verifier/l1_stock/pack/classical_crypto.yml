@@ -1,0 +1,53 @@
+# The CLASSICAL-ERA rule pack -- the RQ4 ablation arm, not part of the verifier.
+#
+# These rules encode pre-quantum crypto-misuse knowledge of the kind stock
+# scanner packs ship: broken ciphers, weak hashes, ECB mode, literal seeds.
+# They are deliberately blind to everything the PQ rule set checks -- parameter
+# floors, hybrid completeness, key-family separation, migration obligation --
+# so running them in place of L1 measures exactly what classical-era rules
+# cannot see (manuscript: "classical-era rules do not transfer"). Authored for
+# this artifact in the idiom of public Java crypto packs; not copied from any
+# distributed ruleset.
+rules:
+  - id: stock-weak-cipher
+    languages: [java]
+    severity: ERROR
+    message: Broken or weak cipher (DES/3DES/RC4/Blowfish).
+    metadata:
+      cwe: CWE-327
+    patterns:
+      - pattern-either:
+          - pattern: Cipher.getInstance("=~/^(DES|DESede|RC4|ARCFOUR|Blowfish)(\/.*)?$/")
+          - pattern: KeyGenerator.getInstance("=~/^(DES|DESede|RC4|ARCFOUR|Blowfish)$/")
+
+  - id: stock-ecb-mode
+    languages: [java]
+    severity: ERROR
+    message: ECB mode provides no semantic security.
+    metadata:
+      cwe: CWE-327
+    patterns:
+      - pattern: Cipher.getInstance("=~/^.*\/ECB\/.*$/")
+
+  - id: stock-weak-hash
+    languages: [java]
+    severity: ERROR
+    message: Weak digest (MD5/SHA-1) in a security context.
+    metadata:
+      cwe: CWE-328
+    patterns:
+      - pattern-either:
+          - pattern: MessageDigest.getInstance("MD5")
+          - pattern: MessageDigest.getInstance("SHA-1")
+          - pattern: MessageDigest.getInstance("SHA1")
+
+  - id: stock-literal-seed
+    languages: [java]
+    severity: ERROR
+    message: SecureRandom constructed from literal seed material.
+    metadata:
+      cwe: CWE-337
+    patterns:
+      - pattern-either:
+          - pattern: new SecureRandom("...".getBytes())
+          - pattern: new SecureRandom(new byte[] { ... })

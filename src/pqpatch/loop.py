@@ -50,6 +50,7 @@ def migrate_site(
     seed: int = 0,
     ruleset_version: str = "unversioned",
     feedback_mode: str = "rule",
+    l1_mode: str = "pq",
 ) -> tuple[Verdict, TraceRecord]:
     """Run the loop for one site; returns the final verdict and its
     finalized trace. `ruleset_version` should carry the frozen rule tag
@@ -73,7 +74,9 @@ def migrate_site(
             seed=seed,
             prompt_version=prompt_version,
         )
-        verdict = verify_patch(patch, site, policy, enabled_layers=enabled_layers)
+        verdict = verify_patch(
+            patch, site, policy, enabled_layers=enabled_layers, l1_mode=l1_mode
+        )
         timings = {report.layer.name: report.duration_ms for report in verdict.layer_reports}
 
         if verdict.status == VerdictStatus.ACCEPT:

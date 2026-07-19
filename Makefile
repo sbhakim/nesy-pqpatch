@@ -34,10 +34,26 @@ rules-test:
 corpus-stats:
 	$(PYTHON) -m pqpatch.eval.corpus_stats
 
-# Not yet meaningful until Phase 7 (full runs exist under runs/); wired now so
-# the target exists and fails loudly rather than being invented later.
+# RQ0: detector precision/recall vs. Tier-2 ground truth. Offline, no model.
+table-detection:
+	$(PYTHON) -m pqpatch.eval.detection
+
+# Funnel + trap summaries from run manifests (loud-fails without runs), and
+# the .tex row fragments a results pass would \input.
+tables:
+	PQPATCH_OFFLINE=1 $(PYTHON) -m pqpatch.eval.tables --latex-dir runs/_latex
+
+# Regenerate the Tier-1 mutated surface (needs tier1/original intake first).
+tier1-mutate:
+	$(PYTHON) -m pqpatch.eval.mutate
+
+# Everything regenerable offline today: corpus state, RQ0, manifest tables.
+# corpus-stats exits nonzero by design while the corpus is incomplete; the
+# leading '-' records that honestly without aborting the rest.
 reproduce-all:
-	PQPATCH_OFFLINE=1 $(PYTHON) -m pqpatch.eval.tables --all
+	-$(MAKE) corpus-stats
+	$(MAKE) table-detection
+	$(MAKE) tables
 
 artifact:
 	@echo "Packaging deferred to Phase 8 (codebase-plan.md §5)." && exit 1
