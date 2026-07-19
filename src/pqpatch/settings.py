@@ -24,6 +24,10 @@ class Settings:
     # OpenAI-compatible endpoint for backend A. Defaults to OpenAI; point it at
     # any compatible host (e.g. https://api.deepseek.com) via the env var.
     backend_a_base_url: str = "https://api.openai.com/v1"
+    # Home of a PQC-capable JDK (>= 24: ML-KEM/ML-DSA) for L4 round-trip
+    # conformance. None means "not configured": L4 records SKIPPED rather than
+    # guessing with a runtime that cannot execute the migrated primitives.
+    l4_java_home: Path | None = None
 
     @classmethod
     def load(cls) -> Settings:
@@ -46,6 +50,11 @@ class Settings:
             ),
             backend_a_base_url=os.environ.get(
                 "PQPATCH_BACKEND_A_BASE_URL", "https://api.openai.com/v1"
+            ),
+            l4_java_home=(
+                Path(os.environ["PQPATCH_L4_JAVA_HOME"])
+                if os.environ.get("PQPATCH_L4_JAVA_HOME")
+                else None
             ),
         )
 
