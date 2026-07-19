@@ -102,6 +102,16 @@ def check(patch: Patch, site: Site, policy: Policy) -> RuleOutcome:
 # --- Project mode: real multi-file build + the project's own tests ---------
 
 
+def _scrub(text: str, tmp: str) -> str:
+    """Strip the randomized temp-directory prefix from tool output before it
+    lands in a RuleOutcome detail. Details feed the repair loop as prompts, so
+    a random path makes prompts -- and therefore cache keys and downstream
+    proposals -- nondeterministic across otherwise identical runs. Found live
+    in the ablation shakeout: two arms diverged at attempt 3 purely because
+    their attempt-2 javac output named different /tmp/pqpatch-l3-* paths."""
+    return text.replace(tmp + "/", "").replace(tmp, "")
+
+
 def _project_build_and_test(patch: Patch, site_file: Path, root: Path) -> RuleOutcome:
     try:
         descriptor = BuildDescriptor.load(root / _DESCRIPTOR_NAME)
@@ -141,7 +151,7 @@ def _project_build_and_test(patch: Patch, site_file: Path, root: Path) -> RuleOu
             return RuleOutcome(
                 RuleStatus.FAIL,
                 detail=f"project build failed (javac exit {compiled.returncode}):\n"
-                f"{compiled.stderr[-1000:]}",
+                f"{_scrub(compiled.stderr, tmp)[-1000:]}",
             )
 
         tested = _run(
@@ -152,7 +162,7 @@ def _project_build_and_test(patch: Patch, site_file: Path, root: Path) -> RuleOu
         if tested is None:
             return RuleOutcome(RuleStatus.ERROR, detail="java not found on PATH")
         if tested.returncode != 0:
-            tail = (tested.stdout + tested.stderr)[-1000:]
+            tail = _scrub(tested.stdout + tested.stderr, tmp)[-1000:]
             return RuleOutcome(
                 RuleStatus.FAIL,
                 detail=f"project tests failed ({descriptor.test_entrypoint} "
@@ -194,7 +204,8 @@ def _single_file_compile(patch: Patch, site_file: Path) -> RuleOutcome:
         if proc.returncode != 0:
             return RuleOutcome(
                 RuleStatus.FAIL,
-                detail=f"single-file javac failed (exit {proc.returncode}):\n{proc.stderr[-1000:]}",
+                detail=f"single-file javac failed (exit {proc.returncode}):\n"
+                f"{_scrub(proc.stderr, tmp)[-1000:]}",
             )
     return RuleOutcome(
         RuleStatus.PASS, detail="single-file compile only (no project descriptor; ADR-002)"
