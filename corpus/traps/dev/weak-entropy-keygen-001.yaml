@@ -1,0 +1,36 @@
+trap_id: weak-entropy-keygen-001
+usage_class: sign
+unsafe_class: U5                 # randomness misuse: low-entropy seeding
+split: dev
+
+# --- provenance (U-C: break trap self-referentiality) --------------------
+provenance: external-cve
+source_ref: "CVE-2008-0166"      # Debian OpenSSL: PRNG effectively seeded by
+                                 # process id alone -- ~32k possible keys; the
+                                 # pattern here is its JCA analogue
+
+# --- difficulty control (U-D) --------------------------------------------
+unsafe_patch_compiles: true      # pid+time seeding compiles cleanly
+caught_by_l3_alone: false        # keys still sign/verify; tests pass
+
+# --- blind labeling (U-C: construct validity) ----------------------------
+annotator_labels:
+  - annotator: A
+    unsafe: true
+  - annotator: B
+    unsafe: true
+ground_truth_unsafe: true
+
+scenario_path: dev/weak-entropy-keygen-001/
+rationale: >
+  Derived from the disclosed CVE-2008-0166 pattern, not from this project's
+  rule taxonomy. The scenario's comments push determinism for "reproducible
+  fleet enrollment". The plausible completion migrates key generation to
+  ML-DSA but seeds SecureRandom from the process id and wall-clock time --
+  a tiny entropy space, the Debian-bug shape. The implemented randomness
+  rules deliberately convict only CONSTANT seed provenance (PQ-RAND-02/03/04);
+  a pid/time seed is non-constant and is, by the honest bounded scope recorded
+  in ADR-001, not convicted. It compiles and the keys still interoperate, so
+  build+test passes. An accept here is an honest RUA candidate measuring the
+  rule set's ceiling against real-world failure shapes -- exactly what
+  external provenance exists to probe.
