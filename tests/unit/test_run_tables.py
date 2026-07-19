@@ -68,6 +68,12 @@ def test_config_hash_is_stable_and_order_independent() -> None:
     assert h1 == h2
     # a different k is a different configuration -> different directory
     assert config_hash(seeds=[0], **{**base, "k": 1}) != config_hash(seeds=[0], **base)
+    # every behavioral knob must move the hash: the ablation arms collided
+    # into one directory before these were included
+    assert config_hash(seeds=[0], l1_mode="stock", **base) != config_hash(seeds=[0], **base)
+    assert config_hash(seeds=[0], feedback_mode="generic", **base) != config_hash(
+        seeds=[0], **base
+    )
 
 
 def test_load_run_and_load_runs_roundtrip(tmp_path: Path) -> None:

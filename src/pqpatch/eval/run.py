@@ -58,10 +58,14 @@ def config_hash(
     prompt_version: str,
     ruleset_version: str,
     policy_version: str,
+    l1_mode: str = "pq",
+    feedback_mode: str = "rule",
 ) -> str:
     """Stable 16-hex digest of the run configuration. Deliberately excludes
     timestamps and git sha so the same experiment always maps to the same
-    directory."""
+    directory. Every knob that changes pipeline behavior must appear here --
+    omitting one would let two different experiments collide into one
+    directory (this bit ablation arms before the shakeout run caught it)."""
     payload = {
         "backend_id": backend_id,
         "model_version": model_version,
@@ -72,6 +76,8 @@ def config_hash(
         "prompt_version": prompt_version,
         "ruleset_version": ruleset_version,
         "policy_version": policy_version,
+        "l1_mode": l1_mode,
+        "feedback_mode": feedback_mode,
     }
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
@@ -99,9 +105,14 @@ def run_config(
     prompt_version: str = "v1",
     ruleset_version: str = "rules-v1.0",
     offline: bool = False,
+    l1_mode: str = "pq",
+    feedback_mode: str = "rule",
+    ablation: str | None = None,
 ) -> Path:
     """Run one (backend, model, corpus) configuration across all detected sites
-    and seeds; write the manifest and per-site records; return the run dir."""
+    and seeds; write the manifest and per-site records; return the run dir.
+    `ablation` is a human-readable arm name recorded in the manifest; the
+    behavioral knobs themselves are the explicit parameters."""
     src_dir = app_dir / "src"
     sites = sorted(detect(src_dir, repo_name=app_dir.name), key=lambda s: (s.file_path, s.line))
 
@@ -115,6 +126,8 @@ def run_config(
         prompt_version=prompt_version,
         ruleset_version=ruleset_version,
         policy_version=policy.version,
+        l1_mode=l1_mode,
+        feedback_mode=feedback_mode,
     )
     run_dir = runs_dir / chash
     sites_dir = run_dir / "sites"
@@ -135,6 +148,8 @@ def run_config(
                     prompt_version=prompt_version,
                     seed=seed,
                     ruleset_version=ruleset_version,
+                    l1_mode=l1_mode,
+                    feedback_mode=feedback_mode,
                 )
                 record: dict[str, Any] = {
                     "site_id": site.site_id,
@@ -176,6 +191,9 @@ def run_config(
         "prompt_version": prompt_version,
         "ruleset_version": ruleset_version,
         "policy_version": policy.version,
+        "l1_mode": l1_mode,
+        "feedback_mode": feedback_mode,
+        "ablation": ablation,
         "offline": offline,
         "git_sha": _git_sha(repo_root),
         "created_at_utc": datetime.now(UTC).isoformat(),

@@ -151,9 +151,10 @@ def _emit_run(run: dict[str, Any]) -> None:
     man = run["manifest"]
     records = run["records"]
     n_err = sum(1 for r in records if r.get("status") == "error")
+    arm = f", arm={man['ablation']}" if man.get("ablation") else ""
     print(
         f"\n=== run {man['config_hash']} :: {man['backend_id']} / {man['model_version']} "
-        f"on {man['app']} (k={man['k']}, seeds={man['seeds']}) ==="
+        f"on {man['app']} (k={man['k']}, seeds={man['seeds']}{arm}) ==="
     )
     print(f"records: {len(records)}  ({n_err} error)")
 
