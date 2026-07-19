@@ -1,0 +1,13 @@
+# Declarative build recipe for L3 (verifier/l3_build.py, project mode).
+#
+# App #3's build-shape variation: a two-level package tree (vault.core +
+# vault.crypto) with a two-segment dotted test entrypoint -- one level deeper
+# than secure-archive-tool's single package. The suite (SyncTests) exercises
+# provider-independent behavior only; runtime conformance of migrated
+# primitives is L4's concern, not L3's.
+project: keyvault-syncd
+language: java
+source_dir: src
+test_entrypoint: vault.core.SyncTests
+compile_timeout_s: 60
+test_timeout_s: 30

@@ -1,0 +1,52 @@
+# Ground truth for Tier-2 reference app #3 (keyvault-syncd).
+# Consumed by tests/integration/test_tier2_vault.py and eval/detection.py to
+# compute detector precision/recall (RQ0).
+#
+# Line numbers were confirmed against a REAL detector run, not hand-counted
+# (the sites.yaml lesson from app #1, docs/STATUS.md bug #6).
+#
+# `detectable: true` sites use idioms the semgrep pack matches -- including
+# the provider-pinned KeyPairGenerator two-arg form. The `detectable: false`
+# site is this app's deliberate-miss mechanism (#3): a PROVIDER-PINNED
+# Signature.getInstance(alg, provider) call, invisible to the pack's
+# single-arg Signature patterns (app #1 hides its miss behind a config
+# lookup, app #2 behind string concatenation).
+
+app: keyvault-syncd
+file: src/vault/crypto/SealEngine.java
+
+sites:
+  - line: 28
+    usage_class: sign           # KeyPairGenerator("RSA", "SunRsaSign") -- provider-pinned,
+    detectable: true            # matched by the pack's two-arg KPG pattern
+    note: provider-pinned key-pair generation feeding the SHA512withRSA seal
+
+  - line: 35
+    usage_class: sign           # Signature("SHA512withRSA") + initSign
+    detectable: true
+
+  - line: 43
+    usage_class: verify         # Signature("SHA512withRSA") + initVerify
+    detectable: true
+
+  - line: 52
+    usage_class: verify         # true class if it were detectable; the two-arg
+    detectable: false           # Signature.getInstance("SHA256withECDSA", "SunEC")
+    note: provider-pinned Signature call; expected detector miss (mechanism 3)
+
+  - line: 60
+    usage_class: kem            # KeyPairGenerator("EC", "SunEC") feeding the X25519
+    detectable: true            # agreement within the classifier's forward window
+
+  - line: 67
+    usage_class: kem            # KeyAgreement("X25519") -- unambiguous KEM
+    detectable: true
+
+  - line: 75
+    usage_class: envelope       # Cipher("RSA") key wrap
+    detectable: true
+
+counts:
+  total_sites: 7
+  detectable: 6
+  expected_miss: 1
