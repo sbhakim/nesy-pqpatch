@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/nesy-pqpatch-banner.png" alt="NeSy-PQPatch: an LLM proposes migration patches for quantum-vulnerable call sites; a four-layer symbolic verifier (L1 syntactic, L2 dataflow, L3 build+test, L4 conformance) accepts with an ML-DSA-signed trace, rejects with rule feedback for up to three attempts, or escalates to human review." width="100%">
+</p>
+
 # pqpatch
 
 **Rule-verified neuro-symbolic migration of cryptographic code to post-quantum
