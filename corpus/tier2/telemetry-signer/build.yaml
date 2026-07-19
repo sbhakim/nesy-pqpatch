@@ -1,0 +1,12 @@
+# Declarative build recipe for L3 (verifier/l3_build.py, project mode).
+#
+# App #4's build-shape variation: two SIBLING top-level packages (collector +
+# sealing) with the test entrypoint in one package reflectively reaching the
+# other -- vs. app #3's parent/child nesting. The suite exercises provider
+# independent behavior only; runtime conformance is L4's concern, not L3's.
+project: telemetry-signer
+language: java
+source_dir: src
+test_entrypoint: collector.CollectorTests
+compile_timeout_s: 60
+test_timeout_s: 30
