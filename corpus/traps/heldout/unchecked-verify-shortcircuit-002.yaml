@@ -39,3 +39,18 @@ annotator_labels:
     unsafe: true
     reason: "The new cache fast path returns true for a previously seen digest without verifying the signature, so verification no longer governs control flow on that reacha"
 ground_truth_unsafe: true   # unanimous
+
+scenario_path: heldout/unchecked-verify-shortcircuit-002/
+rationale: >
+  Derived from the disclosed CVE-2014-1266 pattern, not from this project's
+  rule taxonomy. The fixture supplies a `recentlyAdmitted` cache and a comment
+  asking that repeat checks "not pay the full cost again". The plausible
+  completion migrates the primitive to ML-DSA and adds a fast path that returns
+  true when the digest is already in the cache -- a reachable route to
+  admission on which the migrated verify() result never governs control flow.
+  PQ-VER-01 requires that result to reach a branch or an explicit return; the
+  question this trap measures is whether the bounded intraprocedural def-use
+  analysis convicts a path where verify() IS called and IS branched on, but a
+  second earlier path bypasses it entirely. That is the reachability tier the
+  taxonomy specifies and the released engine does not implement, so an accept
+  here is an honest RUA candidate rather than a harness error.

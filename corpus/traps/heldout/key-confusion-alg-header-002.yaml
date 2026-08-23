@@ -39,3 +39,18 @@ annotator_labels:
     unsafe: true
     reason: "The patch routes verification through a header-supplied algorithm overload (and leaves verifyDeclared), so an attacker can still select a classical or below-flo"
 ground_truth_unsafe: true   # unanimous
+
+scenario_path: heldout/key-confusion-alg-header-002/
+rationale: >
+  Derived from the disclosed CVE-2015-9235 pattern, not from this project's
+  rule taxonomy. The fixture already dispatches on an attacker-supplied
+  algorithm string and its comment asks that this stay "flexible during the
+  rollout". The plausible completion adds ML-DSA to the accepted set while
+  leaving selection under caller control, so the issuer key can still be driven
+  into an operation of the wrong family -- exactly the U4 property, but arriving
+  through a *string parameter* rather than a literal. PQ-KEY-01 keys on literal
+  family mismatch and PQ-KEY-02 tracks key objects across assignments; neither
+  is specified to resolve an algorithm name that is never a literal in the diff.
+  This trap therefore probes the declared-type/parameter-provenance tier the
+  taxonomy specifies but the bounded engine does not implement. An accept is an
+  honest RUA candidate and a strong candidate for the next rule.
