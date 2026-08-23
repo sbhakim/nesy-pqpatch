@@ -33,7 +33,7 @@ from pqpatch.detector.api import detect
 from pqpatch.eval.run import _git_sha, config_hash
 from pqpatch.eval.traps import TrapSpec, load_trap_suite
 from pqpatch.extractor.context import extract_context
-from pqpatch.model import Layer, Policy, Site, Verdict, VerdictStatus
+from pqpatch.model import Layer, Policy, RuleStatus, Site, Verdict, VerdictStatus
 from pqpatch.proposer.base import Backend
 from pqpatch.verifier.api import DEFAULT_ENABLED_LAYERS, verify_patch
 
@@ -60,14 +60,32 @@ def _pick_site(spec: TrapSpec, sites: Sequence[Site]) -> Site:
     return matching[0]
 
 
-def _failing_rule(verdict: Verdict) -> tuple[str | None, str | None, str | None]:
-    """(rule_id, layer name, unsafe-class value) of the first failure, if any."""
+def _failing_rule(verdict: Verdict) -> tuple[str | None, str | None, str | None, str | None]:
+    """(rule_id, layer name, unsafe-class value, reject kind) of the first
+    non-passing result.
+
+    ``reject_kind`` separates the two very different reasons a layer can stop a
+    patch, which the verdict alone conflates:
+
+    - ``"rule-violation"`` -- a rule evaluated the patched program and FAILED
+      it. This is a genuine catch and the only kind that may be counted as one.
+    - ``"analysis-error"`` -- the rule could not run at all (status ERROR),
+      overwhelmingly because the model's diff would not apply, so there was no
+      patched program to analyze. The pipeline still refuses the patch, and
+      refusing is correct, but attributing it to the named rule would credit
+      the rule set with a catch it did not make.
+
+    Conflating the two inflates the catch rate and misattributes catches to
+    whichever rule happened to be evaluated first. Measured on real runs, most
+    L2 "catches" were in fact apply failures.
+    """
     for report in verdict.layer_reports:
         failure = report.first_failure
         if failure is not None:
             uc = failure.unsafe_class.value if failure.unsafe_class else None
-            return failure.rule_id, report.layer.name, uc
-    return None, None, None
+            kind = "analysis-error" if failure.status is RuleStatus.ERROR else "rule-violation"
+            return failure.rule_id, report.layer.name, uc, kind
+    return None, None, None, None
 
 
 def evaluate_trap(
@@ -91,7 +109,7 @@ def evaluate_trap(
     full = verify_patch(patch, site, policy, enabled_layers=DEFAULT_ENABLED_LAYERS)
     l3_only = verify_patch(patch, site, policy, enabled_layers=_L3_ONLY)
 
-    rule_id, catch_layer, rule_unsafe_class = _failing_rule(full)
+    rule_id, catch_layer, rule_unsafe_class, reject_kind = _failing_rule(full)
     trap_unsafe_class = spec.unsafe_class.value if spec.unsafe_class else "unanticipated"
 
     full_rejected = full.status != VerdictStatus.ACCEPT
@@ -121,6 +139,9 @@ def evaluate_trap(
         "full_status": full.status.value,
         "full_rejected_rule_id": rule_id,
         "full_catch_layer": catch_layer,
+        # "rule-violation" (a genuine catch) vs "analysis-error" (the rule could
+        # not run -- usually an unapplyable diff). Only the former is a catch.
+        "full_reject_kind": reject_kind,
         "full_rule_unsafe_class": rule_unsafe_class,
         "l3_only_status": l3_only.status.value,
         "l3_only_detail": l3_detail,
