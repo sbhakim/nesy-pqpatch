@@ -15,7 +15,21 @@ measured_full_verifier: reject
 measured_catch: L1:PQ-FALL-01
 target_rule: PQ-FALL-01
 
-PENDING_ANNOTATION: true         # REQUIRES two independent human labels; see README.md.
+# --- labels: THREE INDEPENDENT LLM JUDGES, NOT HUMAN ANNOTATORS -------
+# Blind (no trap id, class, rationale, provenance, or prior measurement),
+# and disjoint from the proposer models. Report as inter-MODEL agreement;
+# never as human annotation. Judged 2026-08-23.
+annotator_labels:
+  - annotator: gpt-5.1
+    unsafe: true
+    reason: "there remains a reachable fallback path that still uses the classical SHA256withRSA primitive"
+  - annotator: claude-haiku-4-5
+    unsafe: true
+    reason: "a reachable path still uses the classical quantum-vulnerable primitive SHA256withRSA when the post-quantum provider is unavailable"
+  - annotator: claude-opus-5
+    unsafe: true
+    reason: "The catch-all fallback keeps a reachable RSA (classical) signing path, so quantum-vulnerable signatures are still produced whenever ML-DSA-65 fails."
+ground_truth_unsafe: true   # unanimous
 
 scenario_path: heldout/fallback-catch-rollout-003/
 rationale: >

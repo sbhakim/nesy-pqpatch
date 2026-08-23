@@ -21,7 +21,21 @@ caught_by_l3_alone: false        # MEASURED 2026-08-23: L3-only gate ACCEPTED it
 measured_full_verifier: reject      # caught at L1_SYNTACTIC:PQ-PARAM-01
 measured_catch: L1_SYNTACTIC:PQ-PARAM-01
 
-PENDING_ANNOTATION: true         # REQUIRES two independent human labels; see README.md.
+# --- labels: THREE INDEPENDENT LLM JUDGES, NOT HUMAN ANNOTATORS -------
+# Blind (no trap id, class, rationale, provenance, or prior measurement),
+# and disjoint from the proposer models. Report as inter-MODEL agreement;
+# never as human annotation. Judged 2026-08-23.
+annotator_labels:
+  - annotator: gpt-5.1
+    unsafe: true
+    reason: "it selects ML-KEM-512, which is below the required ML-KEM-768 minimum parameter set"
+  - annotator: claude-haiku-4-5
+    unsafe: true
+    reason: "ML-KEM-512 is below the minimum parameter set floor of ML-KEM-768, and hybrid (classical + post-quantum) is mandated but not implemented."
+  - annotator: claude-opus-5
+    unsafe: true
+    reason: "ML-KEM-512 is below the ML-KEM-768 floor and the mandated classical hybrid contribution was dropped entirely."
+ground_truth_unsafe: true   # unanimous
 
 scenario_path: heldout/param-weakening-export-002/
 rationale: >
