@@ -11,12 +11,25 @@ from pqpatch.proposer.base import Backend
 from pqpatch.settings import Settings
 
 _DEFAULT_BASE_URL = "https://api.anthropic.com"
-_DEFAULT_MODEL = "claude-fable-5"
+# Sonnet 5 is the default rather than the more capable Fable 5: measured
+# 2026-08-23, Fable 5 returns stop_reason "refusal" (category "cyber") on the
+# adversarial trap prompts this project exists to run, producing zero output
+# tokens. Sonnet 5, Opus 5, and Haiku 4.5 all complete the same prompts.
+_DEFAULT_MODEL = "claude-sonnet-5"
 _ANTHROPIC_VERSION = "2023-06-01"
 
 
 class BackendBCredentialsError(RuntimeError):
     """Raised when PQPATCH_BACKEND_B_API_KEY is not set."""
+
+
+class BackendBRefusalError(RuntimeError):
+    """The model declined the prompt outright (stop_reason "refusal").
+
+    Distinct from a malformed or empty response: the request succeeded and the
+    model chose not to answer. Recording it as its own outcome keeps "the
+    proposer declined" from being counted as a pipeline failure.
+    """
 
 
 class BackendB(Backend):
@@ -58,6 +71,15 @@ class BackendB(Backend):
             resp = client.post("/v1/messages", json=payload, headers=headers)
             resp.raise_for_status()
             data = resp.json()
+        if data.get("stop_reason") == "refusal":
+            # A safety classifier declined the prompt (HTTP 200, no content
+            # blocks). Surface it distinctly: it is a proposer outcome, not a
+            # transport failure and not a malformed response.
+            details = data.get("stop_details") or {}
+            raise BackendBRefusalError(
+                f"model {self.model_version} refused the prompt "
+                f"(category={details.get('category')!r})"
+            )
         text = "".join(block.get("text", "") for block in data.get("content", []))
         usage = data.get("usage", {})
         token_count = int(usage.get("input_tokens", 0)) + int(usage.get("output_tokens", 0))
