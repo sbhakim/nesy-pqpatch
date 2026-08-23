@@ -138,6 +138,38 @@ def test_summarize_counts_split_provenance_and_kappa(tmp_path: Path) -> None:
     assert (stats.n_taxonomy, stats.n_external) == (1, 1)
     assert stats.n_compiling_unsafe == 2
     assert stats.kappa == 1.0  # both traps: annotators agree, single class -> 1.0
+    assert (stats.n_multi_labelled, stats.n_unanimous) == (2, 2)
+    assert stats.pct_agreement == 1.0
+
+
+def test_agreement_counts_every_pair_not_just_the_first_two(tmp_path: Path) -> None:
+    """A third judge must count. With three labels, one trap unanimous and one
+    split 2-1, agreement is over all six pairs, not over the first two
+    annotators alone: the unanimous trap contributes 3 agreeing pairs, the split
+    trap only 1 (the two who agree), so 4/6. The unanimous fraction is 1/2 --
+    a *different* statistic, which the manuscript must not conflate with it.
+    """
+    three = [
+        {"annotator": "A", "unsafe": True},
+        {"annotator": "B", "unsafe": True},
+        {"annotator": "C", "unsafe": True},
+    ]
+    split = [
+        {"annotator": "A", "unsafe": False},  # the dissenter
+        {"annotator": "B", "unsafe": True},
+        {"annotator": "C", "unsafe": True},
+    ]
+    _write(tmp_path, {**_VALID, "annotator_labels": three}, "a.yaml")
+    _write(
+        tmp_path,
+        {**_VALID, "trap_id": "t-002", "annotator_labels": split},
+        "b.yaml",
+    )
+    stats = summarize_suite(load_trap_suite(tmp_path))
+
+    assert (stats.n_multi_labelled, stats.n_unanimous) == (2, 1)
+    assert stats.pct_agreement == 4 / 6  # 3 agreeing pairs + 1 agreeing pair
+    assert stats.n_unanimous / stats.n_multi_labelled == 0.5  # != 4/6
 
 
 def test_committed_dev_trap_is_valid() -> None:

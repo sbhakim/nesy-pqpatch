@@ -206,7 +206,15 @@ class TrapSuiteStats:
     construct-validity facts the paper reports before any grid run: the split
     sizes, the provenance mix (the antidote to taxonomy self-referentiality),
     the compiling fraction (the traps a build gate cannot see), and the
-    pre-registered two-annotator kappa where labels permit it."""
+    blind-label agreement where labels permit it.
+
+    **Agreement is reported as percent agreement and the unanimous fraction,
+    not kappa.** A trap suite is unsafe by construction, so the label marginals
+    are degenerate: expected agreement approaches 1 and kappa collapses toward 0
+    however well the labellers actually agree. Measured on this suite, kappa is
+    0.000 at 91.7% pairwise agreement -- the kappa paradox, not a labelling
+    failure. `kappa` is retained so that result stays reproducible, but it must
+    not be reported as a reliability figure."""
 
     total: int
     n_dev: int
@@ -216,20 +224,47 @@ class TrapSuiteStats:
     n_unanticipated: int
     n_compiling_unsafe: int
     kappa: float | None  # None when < 2 comparable annotators span the suite
+    n_multi_labelled: int = 0  # traps carrying >= 2 labels (agreement's denominator)
+    n_unanimous: int = 0  # of those, traps where every label agrees
+    pct_agreement: float | None = None  # agreeing label pairs / all label pairs
 
 
 def summarize_suite(specs: tuple[TrapSpec, ...]) -> TrapSuiteStats:
-    """Compute the offline suite summary. Kappa is taken over the first two
-    annotators of every trap that carries at least two labels, matching the
-    manuscript's blind-labeling protocol (metrics.cohen_kappa)."""
+    """Compute the offline suite summary.
+
+    Kappa is taken over the first two annotators of every trap carrying at least
+    two labels (metrics.cohen_kappa), and is kept only for reproducibility of
+    the degenerate-marginals finding. The reportable agreement figures are
+    `pct_agreement` -- over every unordered pair of labels on every
+    multi-labelled trap, so a third judge counts rather than being dropped --
+    and `n_unanimous`, which keeps contested traps visible instead of averaging
+    them away.
+    """
     labels_a: list[bool] = []
     labels_b: list[bool] = []
+    agreeing_pairs = 0
+    total_pairs = 0
+    n_multi = 0
+    n_unanimous = 0
     for spec in specs:
         if len(spec.annotator_labels) >= 2:
             labels_a.append(spec.annotator_labels[0].unsafe)
             labels_b.append(spec.annotator_labels[1].unsafe)
 
+            verdicts = [label.unsafe for label in spec.annotator_labels]
+            n_multi += 1
+            if len(set(verdicts)) == 1:
+                n_unanimous += 1
+            for i in range(len(verdicts)):
+                for j in range(i + 1, len(verdicts)):
+                    total_pairs += 1
+                    if verdicts[i] == verdicts[j]:
+                        agreeing_pairs += 1
+
     return TrapSuiteStats(
+        n_multi_labelled=n_multi,
+        n_unanimous=n_unanimous,
+        pct_agreement=(agreeing_pairs / total_pairs) if total_pairs else None,
         total=len(specs),
         n_dev=sum(1 for s in specs if s.split is TrapSplit.DEV),
         n_heldout=sum(1 for s in specs if s.split is TrapSplit.HELDOUT),
