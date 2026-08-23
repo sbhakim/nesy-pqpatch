@@ -191,13 +191,26 @@ def verify_patch(
 
 
 def rejection_feedback(verdict: Verdict) -> str | None:
-    """Rationale text for the repair loop; None unless the verdict is a
-    rejection whose failing rule carries one."""
+    """Feedback text for the repair loop; None unless the verdict is a
+    rejection carrying something to say.
+
+    A rule that FAILED evaluated the patched program and found a real
+    violation, so its rationale is the right thing to send back. A rule that
+    ERRORED never evaluated anything -- overwhelmingly because the diff would
+    not apply -- and its rationale describes a cryptographic property the patch
+    may not have violated at all. Sending that would point the next attempt at
+    the wrong problem entirely: the model would be told to fix, say, an
+    unchecked verification result when what actually happened is that its hunk
+    context did not match the file. The error detail says what really went
+    wrong, so that is what goes back instead.
+    """
     if verdict.status != VerdictStatus.REJECT:
         return None
     for report in verdict.layer_reports:
         failure = report.first_failure
-        if failure is not None:
-            text = failure.rationale or failure.detail
-            return text or None
+        if failure is None:
+            continue
+        if failure.status is RuleStatus.ERROR:
+            return failure.detail or None
+        return failure.rationale or failure.detail or None
     return None
