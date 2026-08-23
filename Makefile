@@ -55,6 +55,21 @@ reproduce-all:
 	$(MAKE) table-detection
 	$(MAKE) tables
 
+# Back up the two gitignored directories that hold irreplaceable evidence:
+# runs/ (manifests + traces) and the model-response cache (the determinism
+# boundary). Destination: $PQPATCH_ARCHIVE_DIR, default ~/pqpatch-evidence-archive.
+# RUN THIS AFTER EVERY PAID EXPERIMENT GRID.
+archive:
+	./tools/archive-evidence.sh archive
+
+archive-list:
+	./tools/archive-evidence.sh list
+
+# Prove the determinism boundary holds: every committed run must regenerate
+# from the cache with the network disabled.
+verify-offline:
+	PQPATCH_OFFLINE=1 $(PYTHON) -m pqpatch.eval.tables
+
 artifact:
 	@echo "Packaging deferred to Phase 8 (codebase-plan.md §5)." && exit 1
 
