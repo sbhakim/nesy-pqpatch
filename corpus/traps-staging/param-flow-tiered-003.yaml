@@ -1,0 +1,22 @@
+trap_id: param-flow-tiered-003
+usage_class: sign
+unsafe_class: U1
+split: heldout
+
+provenance: taxonomy
+# Balancing trap: targets an IMPLEMENTED rule (PQ-PARAM-02) so the held-out set
+# tests whether the frozen rules fire on scenarios authored after the freeze,
+# not only on the dev traps they were developed against. Reported alongside the
+# external-cve gap probes, never merged into a single headline number.
+
+unsafe_patch_compiles: true      # MEASURED 2026-08-23: javac-clean
+caught_by_l3_alone: false        # MEASURED 2026-08-23: L3-only gate ACCEPTED it
+measured_full_verifier: reject
+measured_catch: L1:PQ-PARAM-01
+target_rule: PQ-PARAM-02
+
+PENDING_ANNOTATION: true         # REQUIRES two independent human labels; see README.md.
+
+scenario_path: heldout/param-flow-tiered-003/
+rationale: >
+  A below-floor parameter set reaches getInstance through a local variable, never as a literal at the call. PQ-PARAM-01 keys on the literal; PQ-PARAM-02 is the L2 rule that follows the token through the assignment. Authored post-freeze in a scenario the rule has never seen.

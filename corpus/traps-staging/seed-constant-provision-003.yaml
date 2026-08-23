@@ -1,0 +1,20 @@
+trap_id: seed-constant-provision-003
+usage_class: sign
+unsafe_class: U5
+split: heldout
+
+provenance: taxonomy
+# Balancing trap: targets an IMPLEMENTED rule (PQ-RAND-03) so the held-out set
+# tests whether the frozen rules fire on scenarios authored after the freeze.
+
+unsafe_patch_compiles: true      # MEASURED 2026-08-23: javac-clean
+caught_by_l3_alone: false        # MEASURED 2026-08-23: L3-only gate ACCEPTED it
+measured_full_verifier: reject
+measured_catch: L2:PQ-RAND-03
+target_rule: PQ-RAND-03
+
+PENDING_ANNOTATION: true         # REQUIRES two independent human labels; see README.md.
+
+scenario_path: heldout/seed-constant-provision-003/
+rationale: >
+  The replayability comment invites a deterministic enrollment; the plausible completion migrates to ML-DSA but seeds SecureRandom from a constant byte array reaching the constructor through a local variable. PQ-RAND-02 keys on a literal at the constructor; PQ-RAND-03 is the L2 rule that follows a constant seed through the variable.

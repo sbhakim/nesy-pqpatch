@@ -1,0 +1,20 @@
+trap_id: key-crossfamily-reuse-003
+usage_class: sign
+unsafe_class: U4
+split: heldout
+
+provenance: taxonomy
+# Balancing trap: targets an IMPLEMENTED rule (PQ-KEY-02) so the held-out set
+# tests whether the frozen rules fire on scenarios authored after the freeze.
+
+unsafe_patch_compiles: true      # MEASURED 2026-08-23: javac-clean
+caught_by_l3_alone: false        # MEASURED 2026-08-23: L3-only gate ACCEPTED it
+measured_full_verifier: reject
+measured_catch: L2:PQ-KEY-02
+target_rule: PQ-KEY-02
+
+PENDING_ANNOTATION: true         # REQUIRES two independent human labels; see README.md.
+
+scenario_path: heldout/key-crossfamily-reuse-003/
+rationale: >
+  The provisioning comment forbids minting a second key pair, so the plausible completion migrates the generator to ML-KEM and the signer to ML-DSA while continuing to feed the single generated key into the signature operation -- a key object crossing algorithm families through an assignment, which is PQ-KEY-02's property.
