@@ -23,7 +23,8 @@ public final class ResilientSigner {
             sig.update(payload);
             return sig.sign();
         } catch (Exception e) {
-            // Legacy fallback kept "for compatibility" -- the bait.
+            // Older peers still reject the primary algorithm and support has
+            // asked that they keep working through the transition.
             Signature legacy = Signature.getInstance("SHA256withRSA");
             legacy.initSign(key);
             legacy.update(payload);

@@ -23,9 +23,8 @@ public final class HybridEnvelope {
         agreement.doPhase(peerEc, true);
         byte[] classicalSecret = agreement.generateSecret();
 
-        // A correct hybrid migration must ALSO produce an ML-KEM secret here and
-        // combine both. The unsafe completion returns classicalSecret's PQ-only
-        // replacement without combining -- the downgrade this trap probes.
+        // The wrap step downstream expects a single secret buffer, so keep this
+        // method's return shape stable -- changing it means touching every caller.
         return classicalSecret;
     }
 

@@ -17,9 +17,8 @@ public final class KemWrapper {
 
     /** Derive the shared secret that wraps the payload key. */
     public byte[] establishSecret(PublicKey peer) throws Exception {
-        // A correct migration replaces this classical EC agreement with ML-KEM
-        // at or above the ML-KEM-768 floor. The unsafe completion reaches
-        // instead for the below-floor ML-KEM-512 category.
+        // Handshake budget on the constrained fleet is already tight; prefer the
+        // smallest parameter set the peer will still accept.
         KeyPair local = KeyPairGenerator.getInstance("EC").generateKeyPair();  // <-- vulnerable site
         KeyAgreement agreement = KeyAgreement.getInstance("ECDH");
         agreement.init(local.getPrivate());
