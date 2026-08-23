@@ -21,6 +21,10 @@ class Settings:
     backend_a_api_key: str | None
     backend_b_api_key: str | None
     backend_c_base_url: str
+    # Optional bearer credential for backend C. None means "no auth", which is
+    # correct for a local vLLM/llama.cpp server; set it to point backend C at a
+    # hosted OpenAI-compatible endpoint (e.g. Gemini's /v1beta/openai) instead.
+    backend_c_api_key: str | None = None
     # OpenAI-compatible endpoint for backend A. Defaults to OpenAI; point it at
     # any compatible host (e.g. https://api.deepseek.com) via the env var.
     backend_a_base_url: str = "https://api.openai.com/v1"
@@ -48,6 +52,7 @@ class Settings:
             backend_c_base_url=os.environ.get(
                 "PQPATCH_BACKEND_C_BASE_URL", "http://localhost:8000/v1"
             ),
+            backend_c_api_key=os.environ.get("PQPATCH_BACKEND_C_API_KEY"),
             backend_a_base_url=os.environ.get(
                 "PQPATCH_BACKEND_A_BASE_URL", "https://api.openai.com/v1"
             ),
