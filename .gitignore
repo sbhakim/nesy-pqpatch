@@ -5,6 +5,9 @@
 runs/*
 !runs/.gitkeep
 
+# Generated results summaries: same rule as runs/ -- regenerate, never commit.
+RESULTS-SNAPSHOT.txt
+
 # Model-response cache payloads. The canonical archive lives on Zenodo
 # (referenced by checksum); the git tree carries only the directory marker.
 src/pqpatch/proposer/cache/*
