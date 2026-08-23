@@ -77,6 +77,13 @@ class Context:
     site: Site
     enclosing_method: str
     enclosing_class: str
+    # Full text of the site's file. Prompt v1 does not use it, so v1 prompt
+    # bytes -- and therefore every v1 cache key -- are unaffected by its
+    # presence. Prompt v2 needs it: v1 shows the model the enclosing method and
+    # the class *name* only, then asks for a unified diff with hunk context
+    # against the whole file, so the model has to invent context lines it was
+    # never shown. The content-anchored applier then correctly refuses them.
+    file_source: str = ""
     caller_snippets: tuple[str, ...] = field(default_factory=tuple)
     callee_snippets: tuple[str, ...] = field(default_factory=tuple)
     config_excerpts: tuple[str, ...] = field(default_factory=tuple)

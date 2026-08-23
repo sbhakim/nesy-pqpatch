@@ -20,6 +20,43 @@ _METHOD_SIG_RE = re.compile(
 _CLASS_SIG_RE = re.compile(r"^\s*(?:public\s+)?(?:final\s+)?(?:abstract\s+)?class\s+(\w+)")
 
 
+def strip_leading_comment_block(source: str) -> str:
+    """Drop the file's leading comment block, before any code.
+
+    Load-bearing for trap integrity, not cosmetic. Trap fixtures carry their
+    provenance in a file-header comment -- the trap id, its unsafe class, the
+    intended migration, the plausible-but-unsafe completion, and the rule that
+    catches it. Under prompt v1 that was safe by construction, because only the
+    enclosing method ever reached the model (docs and plan: "file-header
+    comments are safe, in-method comments are not"). Prompt v2 shows the whole
+    file and voids that guarantee, so the header is removed here instead.
+
+    Only the *leading* block is stripped. Comments inside the code are left
+    alone: they are part of what the model must read, and the corpus already
+    holds them to the leak discipline (the in-method answer-leaking comments
+    were scrubbed from four dev fixtures separately).
+    """
+    lines = source.splitlines(keepends=True)
+    idx = 0
+    in_block = False
+    for i, raw in enumerate(lines):
+        stripped = raw.strip()
+        if in_block:
+            if "*/" in stripped:
+                in_block = False
+            idx = i + 1
+            continue
+        if not stripped or stripped.startswith("//"):
+            idx = i + 1
+            continue
+        if stripped.startswith("/*"):
+            in_block = "*/" not in stripped
+            idx = i + 1
+            continue
+        break  # first line of real code
+    return "".join(lines[idx:])
+
+
 def _find_enclosing_class(lines: list[str], site_line_idx: int) -> str:
     for i in range(site_line_idx, -1, -1):
         m = _CLASS_SIG_RE.match(lines[i])
@@ -77,6 +114,9 @@ def extract_context(site: Site, *, repo_root: Path | None = None) -> Context:
         site=site,
         enclosing_method=method_source,
         enclosing_class=enclosing_class,
+        # Header block removed: see strip_leading_comment_block. Prompt v1 never
+        # reads this field, so v1 prompt bytes and cache keys are unaffected.
+        file_source=strip_leading_comment_block(source),
         caller_snippets=(),
         callee_snippets=(),
         config_excerpts=(),

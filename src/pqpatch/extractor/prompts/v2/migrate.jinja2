@@ -1,0 +1,71 @@
+{# Prompt v2. Differs from v1 in exactly one respect: the model is shown the
+   COMPLETE file it is asked to diff against, instead of the enclosing method
+   plus the class name.
+
+   v1 asks for a unified diff with hunk context against the whole file, while
+   showing only a method body and a bare class name. The context lines the
+   format requires were therefore never in the prompt, so the model had to
+   guess them -- and the content-anchored applier refuses a hunk whose context
+   does not match, which is the correct behaviour. The result was a large,
+   silent patch-application failure rate across unrelated vendors, and it is
+   the confound this version exists to remove.
+
+   No line-number gutter, deliberately: rules/diffapply.py anchors each hunk by
+   content and treats the @@ offset as a hint only, so numbers would buy no
+   correctness while adding a fresh way to fail (a model that copies the gutter
+   into its diff). The file is shown exactly as it is on disk, so every context
+   line is quotable verbatim.
+
+   Everything else -- policy rendering, rule list, feedback block, output
+   contract -- is held byte-identical to v1 on purpose, so a v1/v2 comparison
+   isolates context scope and nothing else. Do not "improve" the wording here
+   without forking a v3; drift would silently destroy that comparison. #}
+You are migrating a single quantum-vulnerable cryptographic call site to a
+post-quantum-safe equivalent. Output ONLY a unified diff for the file below,
+followed by a JSON object on its own final line describing your patch.
+
+# Site
+File: {{ site.file_path }}
+Line: {{ site.line }}
+Usage class: {{ site.usage_class.value }}
+Matched API: {{ site.matched_symbol }}
+
+# Complete current contents of {{ site.file_path }}
+Your diff is applied to exactly this text. Quote these lines verbatim as hunk
+context, including indentation; do not reconstruct them from memory.
+```
+{{ context.file_source }}
+```
+
+# Enclosing method (migrate only within this method's scope)
+```
+{{ context.enclosing_method }}
+```
+
+# Migration policy
+{% for usage_class, floor in policy.floors.items() -%}
+- {{ usage_class.value }}: minimum {{ floor }}{% if policy.hybrid_required.get(usage_class, false) %} (hybrid with a classical component REQUIRED){% endif %}
+
+{% endfor -%}
+Approved randomness sources: {{ policy.allowed_randomness_sources | join(", ") }}
+
+Rules that MUST hold in your patch:
+- Never fall back to a classical algorithm on any error path.
+- Never leave a signature-verification result unchecked.
+- Never reuse a key object across algorithm families.
+- Only use the approved randomness sources listed above.
+- If hybrid is required for this usage class, retain BOTH the classical and
+  post-quantum key-exchange contributions.
+- Do not modify any file other than {{ site.file_path }}.
+
+{% if feedback %}
+# Feedback on your previous attempt (attempt {{ attempt }})
+Your previous patch was REJECTED for this reason:
+{{ feedback }}
+
+Propose a corrected patch that addresses this specific violation.
+{% endif -%}
+
+# Required output format
+1. A unified diff (--- a/{{ site.file_path }} / +++ b/{{ site.file_path }}).
+2. A final line of JSON: {"primitive": "<name>", "parameters": "<params>"}
