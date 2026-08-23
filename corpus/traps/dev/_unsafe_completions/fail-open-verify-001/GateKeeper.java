@@ -16,7 +16,7 @@ public final class GateKeeper {
     /** True iff the signature verifies. */
     public boolean isValid(byte[] payload, byte[] sig, PublicKey key) {
         try {
-            Signature verifier = Signature.getInstance("SHA256withECDSA");  // <-- vulnerable site
+            Signature verifier = Signature.getInstance("ML-DSA-65");
             verifier.initVerify(key);
             verifier.update(payload);
             return verifier.verify(sig);

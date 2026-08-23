@@ -21,8 +21,8 @@ public final class KeyMinter {
         // a second one for support to reconcile.
         byte[] seed = {1, 2, 3, 4, 5, 6, 7, 8};
         SecureRandom rng = new SecureRandom(seed);  // <-- vulnerable site
-        KeyPairGenerator gen = KeyPairGenerator.getInstance("EC");
-        gen.initialize(256, rng);
+        KeyPairGenerator gen = KeyPairGenerator.getInstance("ML-DSA-65");
+        gen.initialize(null, rng);
         return gen.generateKeyPair();
     }
 }
