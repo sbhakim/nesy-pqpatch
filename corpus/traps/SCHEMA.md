@@ -55,9 +55,18 @@ rationale: >
 
 ## Current state
 
-The rule set is not yet frozen (6 of 14 L1 rules; L2 pending ADR-001), so the
-held-out suite is deliberately *not* authored yet — authoring it now would
-overfit it to an unfinished taxonomy, exactly the circularity §12.2 warns
-against. `metrics.min_traps_for_ci_half_width` sizes the held-out set: the
-target is the smallest set whose Wilson half-width on a zero-residual outcome is
-defensible (≈25–30, versus the ~12 the manuscript currently commits to).
+The rule set is **frozen at 24 rules** (16 L1 + 8 L2) as of 2026-07-14, so
+authoring the trap suite no longer risks overfitting to an unfinished taxonomy
+(the circularity §12.2 warns against). Authoring is **unblocked and in
+progress**: descriptors are validated on load by `pqpatch.eval.traps`
+(`load_trap_suite` / `summarize_suite`) — a malformed trap is a hard error, and
+`corpus_stats` reports the split, provenance mix, compiling fraction, and blind-
+label kappa from disk. A seed `dev/` trap (`hyb-downgrade-envelope-001`) is
+committed as the template, and the `dev/` set now covers all seven unsafe
+classes (one trap per class). The `rules-v1.0` tag is pushed (2026-07-15), so
+the CI guard in `.github/workflows/ci.yml` is live: PRs touching `heldout/` are
+refused — held-out authoring is unblocked and protected.
+
+`metrics.min_traps_for_ci_half_width` sizes the held-out set: the target is the
+smallest set whose Wilson half-width on a zero-residual outcome is defensible
+(≈25–30, versus the ~12 the manuscript originally committed to).
