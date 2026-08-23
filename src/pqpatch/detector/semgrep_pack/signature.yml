@@ -10,6 +10,15 @@ rules:
     metadata:
       usage_hint: ambiguous  # SIGN or VERIFY
       cwe: CWE-327
+    # DO NOT add two-arg Signature.getInstance(alg, provider) patterns here.
+    # Their absence is deliberate, not an oversight: corpus/tier2/keyvault-syncd
+    # seeds a provider-pinned Signature call as `detectable: false` -- one of the
+    # three deliberate-miss mechanisms that make detector recall measurable at
+    # all (app #1 hides its miss behind a config lookup, app #2 behind string
+    # concatenation). Matching the two-arg form here silently converts that
+    # seeded miss into a hit and destroys the RQ0 recall measurement.
+    # Contrast KeyPairGenerator, where the two-arg form IS matched by design
+    # (keyvault-syncd:28 is declared `detectable: true` for exactly that reason).
     patterns:
       - pattern-either:
           - pattern: Signature.getInstance("SHA256withRSA")

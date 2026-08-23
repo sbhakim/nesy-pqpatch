@@ -18,3 +18,9 @@ rules:
           - pattern: KeyPairGenerator.getInstance("EC", $PROVIDER)
           - pattern: KeyPairGenerator.getInstance("DSA")
           - pattern: KeyPairGenerator.getInstance("DiffieHellman")
+          - pattern: KeyPairGenerator.getInstance("DiffieHellman", $PROVIDER)
+          # "DH" and "DiffieHellman" are both JCA standard names for the same
+          # algorithm, so matching only the latter is a recall gap, not a scope
+          # decision. KeyAgreement already matches "DH"; this aligns the two.
+          - pattern: KeyPairGenerator.getInstance("DH")
+          - pattern: KeyPairGenerator.getInstance("DH", $PROVIDER)
