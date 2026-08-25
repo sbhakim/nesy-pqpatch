@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/nesy-pqpatch-banner.png" alt="NeSy-PQPatch: an LLM proposes migration patches for quantum-vulnerable call sites; a four-layer symbolic verifier (L1 syntactic, L2 dataflow, L3 build+test, L4 conformance) accepts with an ML-DSA-signed trace, rejects with rule feedback for up to three attempts, or escalates to human review." width="100%">
+  <img src="docs/assets/nesy-pqpatch-banner.png" alt="NeSy-PQPatch: an LLM proposes migration patches; a policy-driven verifier evaluates L1 syntactic rules, L2 bounded dataflow, L3 build and test, and L4 round-trip checks, producing accept, reject, or escalation outcomes." width="100%">
 </p>
 
 # NeSy-PQPatch
@@ -20,9 +20,9 @@ feedback for bounded re-proposal, or **escalated** to a human. Every decision
 is recorded as a canonical, hashable trace that can be attested with ML-DSA
 signatures.
 
-This repository is the research artifact accompanying the manuscript
-*Catching Unsafe Patches: A Rule-Verified Neuro-Symbolic Pipeline for
-Post-Quantum Cryptographic Code Migration*.
+This repository is the research artifact accompanying the post-quantum
+cryptographic migration study *Catching Unsafe Patches: A Rule-Verified
+Neuro-Symbolic Pipeline for Post-Quantum Cryptographic Code Migration*.
 
 ## Why
 
@@ -63,7 +63,7 @@ The figure above is the system. One pass, left to right:
      must reach a combiner and a KDF.
    - **L3 — build + test**: the patched project compiles and its own test
      suite passes (declarative `build.yaml`, content-anchored diff applier).
-   - **L4 — conformance**: JDK 24 ML-KEM/ML-DSA round trips are implemented;
+   - **L4 — round-trip check**: JDK 24 ML-KEM/ML-DSA round trips are implemented;
      NIST ACVP vectors and cross-provider interoperability remain explicit stubs.
 4. **Repair or escalate.** A rejection returns the violated rule's rationale
    to the model for another attempt, at most `k = 3`, then the site escalates
@@ -122,7 +122,7 @@ Key environment variables (read only by `settings.py`):
 Everything downstream of the model call is deterministic. Model responses are
 cached under a digest of *(model, version, prompt bytes, seed)*; offline mode
 is read-only by construction, so published numbers regenerate with no API
-access, no network, and no GPU. ICC results are generated from `runs/`
+access, no network, and no GPU. Study results are generated from `runs/`
 manifests, blind adjudications, and measured trap descriptors; the generator
 refuses to emit while a required run or accepted-patch label is missing.
 
@@ -130,8 +130,8 @@ refuses to emit while a required run or accepted-patch label is missing.
 make reproduce-all      # corpus state · RQ0 detection scoring · manifest tables
 make table-detection    # detector precision/recall vs. Tier-2 ground truth
 make tables             # capability-funnel + trap summaries, and .tex fragments
-make icc-report         # ICC JSON, figure CSVs, and TeX result macros
-make verify-offline     # replay cached ICC responses and verifier decisions
+make icc-report         # evaluation JSON, figure CSVs, and TeX result macros
+make verify-offline     # replay cached responses and verifier decisions
 make artifact           # deterministic checksummed development evidence ZIP
 make artifact-verify    # verify every packaged member against its manifest
 ```
@@ -174,16 +174,16 @@ detector-confirmed ground truth, and real test suites. Tier 3 is deferred. The
 *plausible* completion is unsafe, with per-trap provenance (taxonomy vs.
 external PR/CVE), three-model blind labels, a difficulty control separating
 what a compiler would already catch, and a held-out subset authored after rule
-freeze — the pre-registered primary endpoint.
+freeze — the primary held-out evaluation endpoint.
 
 ## Status
 
 A research artifact under active development. `docs/STATUS.md` is the
 authoritative ledger of what is implemented versus specified; architecture
-decisions, including open ones, live in `docs/ADR/`. The seed-0 ICC grid is
+decisions, including open ones, live in `docs/ADR/`. The seed-0 evaluation grid is
 complete for three backends and two prompt arms. Runs and response payloads are
-gitignored evidence artifacts; `make icc-report` regenerates manuscript inputs
-and `make verify-offline` proves the cached decisions replay.
+gitignored evidence artifacts; `make icc-report` regenerates evaluation inputs
+and `make verify-offline` proves that cached decisions replay.
 
 ## Citation
 
@@ -192,7 +192,7 @@ and `make verify-offline` proves the cached decisions replay.
   title  = {Catching Unsafe Patches: A Rule-Verified Neuro-Symbolic Pipeline
             for Post-Quantum Cryptographic Code Migration},
   year   = {2026},
-  note   = {Manuscript under review; author list to be added on publication},
+  note   = {Research artifact accompanying the post-quantum migration study},
   url    = {https://github.com/sbhakim/nesy-pqpatch}
 }
 ```
