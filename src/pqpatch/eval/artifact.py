@@ -18,6 +18,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from pqpatch.eval.icc_report import _select_runs
+from pqpatch.eval.mutate import mutate_source
 from pqpatch.eval.run import _git_provenance
 from pqpatch.eval.tables import load_runs
 
@@ -143,6 +144,47 @@ def _git_source_members() -> dict[str, bytes]:
     return members
 
 
+def _tier1_mutated_members(
+    original_root: Path = _ROOT / "corpus" / "tier1" / "original",
+) -> dict[str, bytes]:
+    """Generate ignored Tier-1 variants directly into the evidence archive.
+
+    The working-tree copies are intentionally gitignored because they are
+    reproducible build products.  Emitting them from the same deterministic
+    transformation here prevents an archive from claiming paired artifacts
+    while containing only the original benchmark surfaces.
+    """
+    cases = sorted(path for path in original_root.iterdir() if path.is_dir())
+    if not cases:
+        raise ArtifactError("Tier-1 originals are missing; cannot generate variants")
+
+    members: dict[str, bytes] = {}
+    for case_dir in cases:
+        for path in sorted(case_dir.rglob("*")):
+            if not path.is_file():
+                continue
+            relative = path.relative_to(case_dir)
+            target_name = relative.name
+            if path.suffix == ".java":
+                mutated, new_class = mutate_source(
+                    path.read_text(encoding="utf-8"),
+                    case=f"{case_dir.name}/{relative.as_posix()}",
+                )
+                if new_class is not None:
+                    target_name = f"{new_class}.java"
+                data = mutated.encode("utf-8")
+            else:
+                data = path.read_bytes()
+            target = (
+                Path("code/corpus/tier1/mutated")
+                / case_dir.name
+                / relative.parent
+                / target_name
+            )
+            members[target.as_posix()] = data
+    return members
+
+
 def _selected_evidence_members() -> tuple[dict[str, bytes], list[str], int]:
     selected = _select_runs(load_runs(_ROOT / "runs"))
     members: dict[str, bytes] = {}
@@ -213,9 +255,10 @@ def _manuscript_members() -> dict[str, bytes]:
 
 def build_artifact(output: Path) -> Path:
     source = _git_source_members()
+    tier1_mutated = _tier1_mutated_members()
     evidence, run_ids, cache_count = _selected_evidence_members()
     manuscript = _manuscript_members()
-    members = {**source, **evidence, **manuscript}
+    members = {**source, **tier1_mutated, **evidence, **manuscript}
     provenance = _git_provenance(_ROOT)
     return write_deterministic_archive(
         output,

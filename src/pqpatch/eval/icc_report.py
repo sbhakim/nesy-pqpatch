@@ -38,7 +38,7 @@ from pqpatch.eval.metrics import (
     wilson_ci,
 )
 from pqpatch.eval.tables import load_runs
-from pqpatch.eval.traps import TrapSplit, load_trap_suite
+from pqpatch.eval.traps import TrapProvenance, TrapSpec, TrapSplit, load_trap_suite
 
 _ROOT = Path(__file__).resolve().parents[3]
 _RUNS = _ROOT / "runs"
@@ -127,6 +127,51 @@ def _clustered_rua(
         for record, flag in zip(records, flags, strict=True):
             clusters.setdefault(str(record["trap_id"]), []).append(flag)
     return asdict(cluster_bootstrap_proportion(clusters))
+
+
+def _rua_summary(
+    selected: dict[tuple[str, str], dict[str, Any]],
+    *,
+    split: str | None = None,
+    trap_ids: set[str] | None = None,
+) -> dict[str, Any]:
+    """Summarize unconditional RUA and risk among accepted v2 proposals.
+
+    ``trap_ids`` supports the pre-specified held-out construction buckets. The
+    same joined records and majority labels feed both rates, so the conditional
+    denominator cannot drift from the primary RUA evidence.
+    """
+    flags: list[bool] = []
+    accepted = 0
+    for model in MODELS:
+        run = selected[(model, "v2")]
+        records = _records(run, split=split)
+        run_flags = _rua_flags(run, split=split, rule="majority")
+        for record, flag in zip(records, run_flags, strict=True):
+            if trap_ids is not None and str(record["trap_id"]) not in trap_ids:
+                continue
+            flags.append(flag)
+            accepted += record.get("full_status") == "accept"
+    if not flags:
+        raise ValueError("RUA summary selected no scored records")
+    unsafe = sum(flags)
+    return {
+        "rua": asdict(_count_estimate(unsafe, len(flags))),
+        "accepted": accepted,
+        "unsafe_given_accept": (
+            asdict(_count_estimate(unsafe, accepted)) if accepted else None
+        ),
+    }
+
+
+def _authored_symbolic(specs: list[TrapSpec]) -> dict[str, Any]:
+    if not specs:
+        raise ValueError("authored symbolic summary selected no traps")
+    caught = sum(
+        spec.measured_full_verifier == "reject" and not spec.caught_by_l3_alone
+        for spec in specs
+    )
+    return asdict(_count_estimate(caught, len(specs)))
 
 
 def _consensus_label(entry: dict[str, Any]) -> str | None:
@@ -313,13 +358,48 @@ def build_report(
             ]
             pooled_rua[arm][rule] = asdict(_estimate_flags(flags))
 
-    heldout_flags = [
-        flag
-        for model in MODELS
-        for flag in _rua_flags(
-            selected[(model, "v2")], split=TrapSplit.HELDOUT.value, rule="majority"
-        )
+    heldout_specs = [
+        spec for spec in load_trap_suite(traps_root) if spec.split is TrapSplit.HELDOUT
     ]
+    rule_targeted_specs = [
+        spec
+        for spec in heldout_specs
+        if spec.provenance is TrapProvenance.TAXONOMY and spec.target_rule is not None
+    ]
+    external_specs = [
+        spec
+        for spec in heldout_specs
+        if spec.provenance is TrapProvenance.EXTERNAL_CVE
+    ]
+    bucket_ids = {spec.trap_id for spec in rule_targeted_specs + external_specs}
+    if bucket_ids != {spec.trap_id for spec in heldout_specs}:
+        raise ValueError(
+            "held-out traps must belong to exactly one report bucket: "
+            "rule-targeted taxonomy or external provenance"
+        )
+
+    pooled_v2_summary = _rua_summary(selected)
+    heldout_v2_summary = _rua_summary(selected, split=TrapSplit.HELDOUT.value)
+    heldout_buckets = {
+        "rule_targeted": {
+            "n_traps": len(rule_targeted_specs),
+            "authored_symbolic": _authored_symbolic(rule_targeted_specs),
+            "proposal": _rua_summary(
+                selected,
+                split=TrapSplit.HELDOUT.value,
+                trap_ids={spec.trap_id for spec in rule_targeted_specs},
+            ),
+        },
+        "external": {
+            "n_traps": len(external_specs),
+            "authored_symbolic": _authored_symbolic(external_specs),
+            "proposal": _rua_summary(
+                selected,
+                split=TrapSplit.HELDOUT.value,
+                trap_ids={spec.trap_id for spec in external_specs},
+            ),
+        },
+    }
 
     real_records = [
         record for model in MODELS for record in _records(selected[(model, "v2")])
@@ -341,16 +421,10 @@ def build_report(
     real_unsafe = sum(real_rua_flags)
     real_accepted = sum(record.get("full_status") == "accept" for record in real_records)
 
-    heldout_specs = [
-        spec for spec in load_trap_suite(traps_root) if spec.split is TrapSplit.HELDOUT
-    ]
-    authored_symbolic = sum(
-        spec.measured_full_verifier == "reject" and not spec.caught_by_l3_alone
-        for spec in heldout_specs
-    )
+    authored = _authored_symbolic(heldout_specs)
 
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "design": {
             "models": list(MODELS),
             "arms": list(ARMS),
@@ -368,7 +442,11 @@ def build_report(
         "rua": {
             "rows": rua_rows,
             "pooled": pooled_rua,
-            "heldout_v2_majority": asdict(_estimate_flags(heldout_flags)),
+            "heldout_v2_majority": heldout_v2_summary["rua"],
+            "unsafe_given_accept": {
+                "pooled_v2_majority": pooled_v2_summary["unsafe_given_accept"],
+                "heldout_v2_majority": heldout_v2_summary["unsafe_given_accept"],
+            },
             "clustered": {
                 "pooled_v2_majority": _clustered_rua(selected),
                 "heldout_v2_majority": _clustered_rua(
@@ -376,13 +454,14 @@ def build_report(
                 ),
             },
         },
+        "heldout_buckets": heldout_buckets,
         "proposal_safety": _proposal_safety_report(selected),
         "validity_gap": {
             "authored": {
-                **asdict(_count_estimate(authored_symbolic, len(heldout_specs))),
+                **authored,
                 "application_rejected": 0,
                 "compile_rejected": 0,
-                "accepted_safe_or_missed": len(heldout_specs) - authored_symbolic,
+                "accepted_safe_or_missed": len(heldout_specs) - authored["successes"],
                 "accepted_unsafe": 0,
             },
             "real": {
@@ -409,8 +488,23 @@ def _write_macros(report: dict[str, Any], path: Path) -> None:
     pooled_rua = report["rua"]["pooled"]
     heldout = report["rua"]["heldout_v2_majority"]
     clustered = report["rua"]["clustered"]
+    conditional = report["rua"]["unsafe_given_accept"]
+    buckets = report["heldout_buckets"]
     authored = report["validity_gap"]["authored"]
     real = report["validity_gap"]["real"]
+
+    if (
+        conditional["pooled_v2_majority"] is None
+        or conditional["heldout_v2_majority"] is None
+    ):
+        raise ValueError("ICC report requires accepted v2 proposals for conditional risk")
+
+    rule_authored = buckets["rule_targeted"]["authored_symbolic"]
+    external_authored = buckets["external"]["authored_symbolic"]
+    rule_rua = buckets["rule_targeted"]["proposal"]["rua"]
+    external_rua = buckets["external"]["proposal"]["rua"]
+    heldout_conditional = conditional["heldout_v2_majority"]
+    pooled_conditional = conditional["pooled_v2_majority"]
 
     values = {
         "ICCApplyVOnePooled": _pct(pooled_apply["v1"]["point"]),
@@ -459,6 +553,24 @@ def _write_macros(report: dict[str, Any], path: Path) -> None:
         "ICCAuthoredSymbolicCount": str(authored["successes"]),
         "ICCAuthoredTotal": str(authored["n"]),
         "ICCAuthoredSymbolicPct": _pct(authored["point"]),
+        "ICCAuthoredRuleBucketCount": str(rule_authored["successes"]),
+        "ICCAuthoredRuleBucketTotal": str(rule_authored["n"]),
+        "ICCAuthoredRuleBucketPct": _pct(rule_authored["point"]),
+        "ICCAuthoredExternalBucketCount": str(external_authored["successes"]),
+        "ICCAuthoredExternalBucketTotal": str(external_authored["n"]),
+        "ICCAuthoredExternalBucketPct": _pct(external_authored["point"]),
+        "ICCRUARuleBucketCount": str(rule_rua["successes"]),
+        "ICCRUARuleBucketTotal": str(rule_rua["n"]),
+        "ICCRUARuleBucketPct": _pct(rule_rua["point"]),
+        "ICCRUAExternalBucketCount": str(external_rua["successes"]),
+        "ICCRUAExternalBucketTotal": str(external_rua["n"]),
+        "ICCRUAExternalBucketPct": _pct(external_rua["point"]),
+        "ICCUnsafeAcceptedHeldoutCount": str(heldout_conditional["successes"]),
+        "ICCUnsafeAcceptedHeldoutTotal": str(heldout_conditional["n"]),
+        "ICCUnsafeAcceptedHeldoutPct": _pct(heldout_conditional["point"]),
+        "ICCUnsafeAcceptedFullCount": str(pooled_conditional["successes"]),
+        "ICCUnsafeAcceptedFullTotal": str(pooled_conditional["n"]),
+        "ICCUnsafeAcceptedFullPct": _pct(pooled_conditional["point"]),
         "ICCMcNemarGemini": f"{report['applicability']['mcnemar'][MODELS[0]]['p']:.3f}",
         "ICCMcNemarSonnet": f"{report['applicability']['mcnemar'][MODELS[1]]['p']:.5f}",
         "ICCMcNemarDeepSeek": f"{report['applicability']['mcnemar'][MODELS[2]]['p']:.2f}",

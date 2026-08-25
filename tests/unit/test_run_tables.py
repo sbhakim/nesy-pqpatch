@@ -127,6 +127,28 @@ def test_icc_report_distinguishes_apply_failure_from_analysis_error(tmp_path: Pa
                 "l3_reject_was_apply_failure": model == MODELS[0] and arm == "v2",
             }
             (run_dir / "sites" / "t1__seed0.json").write_text(json.dumps(record))
+            accepted = {
+                "trap_id": "t2",
+                "seed": 0,
+                "split": "heldout",
+                "full_status": "accept",
+                "full_reject_kind": None,
+                "l3_only_status": "accept",
+                "l3_reject_was_apply_failure": False,
+            }
+            (run_dir / "sites" / "t2__seed0.json").write_text(json.dumps(accepted))
+            (run_dir / "adjudications.json").write_text(
+                json.dumps(
+                    {
+                        "t2": {
+                            "labels": [
+                                {"annotator": "a", "unsafe": False},
+                                {"annotator": "b", "unsafe": False},
+                            ]
+                        }
+                    }
+                )
+            )
 
     traps = tmp_path / "traps" / "heldout"
     traps.mkdir(parents=True)
@@ -149,14 +171,37 @@ scenario_path: heldout/t1/
 rationale: synthetic
 """
     )
+    (traps / "t2.yaml").write_text(
+        """trap_id: t2
+usage_class: verify
+unsafe_class: U3
+split: heldout
+provenance: external-cve
+source_ref: CVE-synthetic
+unsafe_patch_compiles: true
+caught_by_l3_alone: false
+measured_full_verifier: accept
+annotator_labels:
+  - {annotator: a, unsafe: true}
+  - {annotator: b, unsafe: true}
+ground_truth_unsafe: true
+scenario_path: heldout/t2/
+rationale: synthetic external gap probe
+"""
+    )
 
     report = build_report(runs_dir=runs, traps_root=tmp_path / "traps")
     assert report["applicability"]["pooled"]["v2"]["successes"] == 1
-    assert report["applicability"]["pooled"]["v2"]["n"] == 3
+    assert report["applicability"]["pooled"]["v2"]["n"] == 6
     assert report["validity_gap"]["authored"]["successes"] == 1
-    assert report["proposal_safety"]["status"] == "not-applicable"
+    assert report["heldout_buckets"]["rule_targeted"]["authored_symbolic"][
+        "successes"
+    ] == 1
+    assert report["heldout_buckets"]["external"]["authored_symbolic"]["successes"] == 0
+    assert report["rua"]["unsafe_given_accept"]["heldout_v2_majority"]["n"] == 3
+    assert report["proposal_safety"]["status"] == "pending-neutral-labels"
     assert report["proposal_safety"]["pipeline_action_confusion"] is None
-    assert report["rua"]["clustered"]["heldout_v2_majority"]["n_clusters"] == 1
+    assert report["rua"]["clustered"]["heldout_v2_majority"]["n_clusters"] == 2
 
     written = write_report(report, tmp_path / "generated")
     assert {path.name for path in written} == {

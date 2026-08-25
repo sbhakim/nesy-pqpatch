@@ -137,9 +137,11 @@ make artifact-verify    # verify every packaged member against its manifest
 ```
 
 `make artifact` packages the selected runs, required response cache, source
-snapshot, and manuscript inputs. It records a dirty-worktree marker when
-applicable. This local package is not a Zenodo release and carries no DOI until
-it is deposited in an immutable public repository.
+snapshot, manuscript inputs, and deterministic Tier-1 mutated counterparts
+(their working-tree copies remain gitignored build products). It records a
+dirty-worktree marker when applicable. This local package is not a Zenodo
+release and carries no DOI until it is deposited in an immutable public
+repository.
 
 Ablation arms are named, frozen definitions (`pqpatch.eval.ablations`):
 `full`, `remove-l2`, `l3-only`, `no-repair`, `generic-feedback`, `stock-l1`.

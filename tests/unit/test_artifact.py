@@ -8,6 +8,7 @@ import pytest
 
 from pqpatch.eval.artifact import (
     ArtifactError,
+    _tier1_mutated_members,
     verify_archive,
     write_deterministic_archive,
 )
@@ -32,3 +33,21 @@ def test_archive_refuses_unsafe_or_secret_paths(tmp_path: Path) -> None:
         write_deterministic_archive(
             tmp_path / "secret.zip", {"code/private.key": b"bad"}, metadata={}
         )
+
+
+def test_tier1_variants_are_generated_into_artifact(tmp_path: Path) -> None:
+    case = tmp_path / "original" / "demo"
+    case.mkdir(parents=True)
+    (case / "Example.java").write_text(
+        "public class Example { int f(int value) { return value; } }\n",
+        encoding="utf-8",
+    )
+    descriptor = b"case_id: demo\nreference_target: ML-DSA\n"
+    (case / "case.yaml").write_bytes(descriptor)
+
+    members = _tier1_mutated_members(tmp_path / "original")
+    java_names = [name for name in members if name.endswith(".java")]
+    assert len(java_names) == 1
+    assert java_names[0] != "code/corpus/tier1/mutated/demo/Example.java"
+    assert b"class Example" not in members[java_names[0]]
+    assert members["code/corpus/tier1/mutated/demo/case.yaml"] == descriptor
