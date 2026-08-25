@@ -14,8 +14,8 @@ decided here, because deciding them mechanically would be circular:
   missed. Distinguishing those is exactly the adjudication step.
 - **RUA's numerator** therefore never comes from this module. Every ACCEPTED
   trap proposal is written to the run directory with its diff and flagged
-  ``needs_adjudication``; a human labels it against the trap's ground truth
-  before any residual-unsafe-accept number is claimed.
+  ``needs_adjudication``; independent blind judges label it against the trap's
+  ground truth before any residual-unsafe-accept number is claimed.
 
 First-attempt scoring only: the trap table is defined over first proposals
 (bait-take b_m); repair-loop behavior is RQ3's question, not this harness's.
@@ -30,11 +30,13 @@ from pathlib import Path
 from typing import Any
 
 from pqpatch.detector.api import detect
-from pqpatch.eval.run import _git_sha, config_hash
+from pqpatch.eval.adjudicate import proposal_id
+from pqpatch.eval.run import _git_provenance, config_hash
 from pqpatch.eval.traps import TrapSpec, load_trap_suite
 from pqpatch.extractor.context import extract_context
 from pqpatch.model import Layer, Policy, RuleStatus, Site, Verdict, VerdictStatus
 from pqpatch.proposer.base import Backend
+from pqpatch.proposer.cache import request_spec_digest
 from pqpatch.verifier.api import DEFAULT_ENABLED_LAYERS, verify_patch
 
 _L3_ONLY: frozenset[Layer] = frozenset({Layer.L3_BUILD})
@@ -125,7 +127,7 @@ def evaluate_trap(
             if failure is not None:
                 l3_detail = failure.detail[:300]
                 break
-    return {
+    record = {
         "trap_id": spec.trap_id,
         "usage_class": spec.usage_class.value,
         "trap_unsafe_class": trap_unsafe_class,
@@ -134,6 +136,9 @@ def evaluate_trap(
         "ground_truth_unsafe": spec.ground_truth_unsafe,
         "unsafe_patch_compiles": spec.unsafe_patch_compiles,
         "seed": seed,
+        "draw_id": f"seed:{seed}",
+        "model_version": backend.model_version,
+        "prompt_version": prompt_version,
         "site_id": site.site_id,
         # the two gates over the same first proposal
         "full_status": full.status.value,
@@ -155,6 +160,8 @@ def evaluate_trap(
         "unified_diff": patch.unified_diff,
         "response_hash": patch.response_hash,
     }
+    record["proposal_id"] = proposal_id(record)
+    return record
 
 
 def run_trap_config(
@@ -177,6 +184,8 @@ def run_trap_config(
     ]
     corpus_id = f"traps/{split or 'all'}"
 
+    request_spec = backend.request_spec()
+    request_sha = request_spec_digest(request_spec)
     chash = config_hash(
         backend_id=backend.backend_id,
         model_version=backend.model_version,
@@ -187,6 +196,7 @@ def run_trap_config(
         prompt_version=prompt_version,
         ruleset_version=ruleset_version,
         policy_version=policy.version,
+        request_spec_sha256=request_sha,
     )
     run_dir = runs_dir / chash
     sites_dir = run_dir / "sites"
@@ -232,6 +242,11 @@ def run_trap_config(
         "app": corpus_id,
         "backend_id": backend.backend_id,
         "model_version": backend.model_version,
+        "request_spec": request_spec,
+        "request_spec_sha256": request_sha,
+        "draw_semantics": (
+            "provider-seeded" if request_spec.get("seed_supported") else "requested-draw"
+        ),
         "seeds": list(seeds),
         "k": 1,
         "enabled_layers": sorted(layer.name for layer in DEFAULT_ENABLED_LAYERS),
@@ -239,7 +254,7 @@ def run_trap_config(
         "ruleset_version": ruleset_version,
         "policy_version": policy.version,
         "offline": offline,
-        "git_sha": _git_sha(repo_root),
+        **_git_provenance(repo_root),
         "created_at_utc": datetime.now(UTC).isoformat(),
         "n_traps": len(specs),
         "n_records": len(records),

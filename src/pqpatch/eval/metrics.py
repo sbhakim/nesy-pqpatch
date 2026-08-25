@@ -9,8 +9,9 @@ hand-computed reference values.
 from __future__ import annotations
 
 import statistics
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from random import Random
 
 from scipy import stats
 
@@ -57,6 +58,110 @@ def wilson_ci(successes: int, n: int, *, confidence: float = 0.95) -> Estimate:
 
 def proportion_estimate(outcomes: Sequence[bool], *, confidence: float = 0.95) -> Estimate:
     return wilson_ci(sum(outcomes), len(outcomes), confidence=confidence)
+
+
+@dataclass(frozen=True, slots=True)
+class ClusteredEstimate:
+    """A proportion with a percentile interval from whole-cluster resampling."""
+
+    point: float
+    ci_low: float
+    ci_high: float
+    n: int
+    successes: int
+    n_clusters: int
+    iterations: int
+    bootstrap_seed: int
+
+
+def _quantile(values: Sequence[float], probability: float) -> float:
+    ordered = sorted(values)
+    position = probability * (len(ordered) - 1)
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    fraction = position - lower
+    return ordered[lower] * (1 - fraction) + ordered[upper] * fraction
+
+
+def cluster_bootstrap_proportion(
+    clusters: Mapping[str, Sequence[bool]],
+    *,
+    confidence: float = 0.95,
+    iterations: int = 20_000,
+    seed: int = 20260824,
+) -> ClusteredEstimate:
+    """Resample whole traps while retaining their dependent model outputs.
+
+    The point estimate remains the ordinary observation-level proportion. The
+    interval samples cluster identifiers with replacement and pools every row
+    belonging to each sampled cluster. This is the appropriate uncertainty
+    diagnostic when multiple model outputs share one authored trap.
+    """
+    if not 0.0 < confidence < 1.0:
+        raise ValueError("confidence must be in (0, 1)")
+    if iterations < 1:
+        raise ValueError("iterations must be positive")
+    normalized = {str(key): tuple(values) for key, values in clusters.items()}
+    if not normalized or any(not values for values in normalized.values()):
+        raise ValueError("clusters must contain at least one non-empty cluster")
+
+    keys = sorted(normalized)
+    all_values = [value for key in keys for value in normalized[key]]
+    generator = Random(seed)  # noqa: S311 -- reproducible statistical resampling
+    samples: list[float] = []
+    for _ in range(iterations):
+        drawn = [normalized[generator.choice(keys)] for _ in keys]
+        successes = sum(sum(values) for values in drawn)
+        n = sum(len(values) for values in drawn)
+        samples.append(successes / n)
+
+    alpha = (1.0 - confidence) / 2.0
+    return ClusteredEstimate(
+        point=sum(all_values) / len(all_values),
+        ci_low=_quantile(samples, alpha),
+        ci_high=_quantile(samples, 1.0 - alpha),
+        n=len(all_values),
+        successes=sum(all_values),
+        n_clusters=len(keys),
+        iterations=iterations,
+        bootstrap_seed=seed,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class SafetyConfusion:
+    """Binary verifier action versus independently assigned safety labels."""
+
+    true_positive: int
+    false_positive: int
+    false_negative: int
+    true_negative: int
+    abstained: int
+
+    @property
+    def n_binary(self) -> int:
+        return self.true_positive + self.false_positive + self.false_negative + self.true_negative
+
+
+def safety_confusion(
+    verifier_rejected: Sequence[bool], labels: Sequence[str]
+) -> SafetyConfusion:
+    """Build a confusion matrix without coercing abstentions into safe labels."""
+    if len(verifier_rejected) != len(labels):
+        raise ValueError("verifier decisions and labels must have equal length")
+    tp = fp = fn = tn = abstained = 0
+    for rejected, label in zip(verifier_rejected, labels, strict=True):
+        if label not in {"safe", "unsafe"}:
+            abstained += 1
+        elif rejected and label == "unsafe":
+            tp += 1
+        elif rejected:
+            fp += 1
+        elif label == "unsafe":
+            fn += 1
+        else:
+            tn += 1
+    return SafetyConfusion(tp, fp, fn, tn, abstained)
 
 
 def mcnemar_exact_p(b: int, c: int) -> float:

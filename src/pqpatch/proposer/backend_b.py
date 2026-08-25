@@ -53,6 +53,17 @@ class BackendB(Backend):
         self.model_version = model
         self._base_url = base_url
 
+    def request_spec(self) -> dict[str, object]:
+        return {
+            "schema_version": 1,
+            "api_style": "anthropic-messages",
+            "api_version": _ANTHROPIC_VERSION,
+            "temperature": None,
+            "top_p": None,
+            "max_tokens": 4096,
+            "seed_supported": False,
+        }
+
     def _generate_raw(
         self, prompt: str, *, seed: int, site_id: str, attempt: int
     ) -> tuple[str, int]:

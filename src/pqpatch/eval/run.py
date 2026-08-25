@@ -29,6 +29,7 @@ from pqpatch.extractor.context import extract_context
 from pqpatch.loop import DEFAULT_K, migrate_site
 from pqpatch.model import Layer, Policy, Verdict
 from pqpatch.proposer.base import Backend
+from pqpatch.proposer.cache import request_spec_digest
 from pqpatch.trace.canonical import to_canonical_json
 from pqpatch.verifier.api import DEFAULT_ENABLED_LAYERS
 
@@ -47,6 +48,55 @@ def _git_sha(repo_root: Path) -> str:
         return "unknown"
 
 
+def _git_provenance(repo_root: Path) -> dict[str, str | bool]:
+    """Identify the exact tracked/untracked working-tree snapshot used.
+
+    A commit SHA alone is insufficient when an experiment runs from a dirty
+    tree.  Hash every tracked and non-ignored untracked file, including its
+    relative path, so a later archive can prove which bytes produced a run.
+    Ignored evidence directories are excluded by ``git ls-files`` itself.
+    """
+    sha = _git_sha(repo_root)
+    try:
+        status = subprocess.run(  # noqa: S603
+            ["git", "-C", str(repo_root), "status", "--porcelain=v1"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        listed = subprocess.run(  # noqa: S603, S607
+            [  # noqa: S607
+                "git",
+                "-C",
+                str(repo_root),
+                "ls-files",
+                "-co",
+                "--exclude-standard",
+                "-z",
+            ],
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+        digest = hashlib.sha256()
+        for raw_path in sorted(path for path in listed.stdout.split(b"\0") if path):
+            path = repo_root / raw_path.decode("utf-8")
+            if not path.is_file():
+                continue
+            digest.update(raw_path)
+            digest.update(b"\0")
+            digest.update(path.read_bytes())
+            digest.update(b"\0")
+        return {
+            "git_sha": sha,
+            "git_dirty": bool(status.stdout.strip()),
+            "worktree_sha256": digest.hexdigest(),
+        }
+    except (OSError, subprocess.SubprocessError, UnicodeDecodeError):
+        return {"git_sha": sha, "git_dirty": True, "worktree_sha256": "unknown"}
+
+
 def config_hash(
     *,
     backend_id: str,
@@ -60,6 +110,7 @@ def config_hash(
     policy_version: str,
     l1_mode: str = "pq",
     feedback_mode: str = "rule",
+    request_spec_sha256: str = "legacy-unknown",
 ) -> str:
     """Stable 16-hex digest of the run configuration. Deliberately excludes
     timestamps and git sha so the same experiment always maps to the same
@@ -78,6 +129,7 @@ def config_hash(
         "policy_version": policy_version,
         "l1_mode": l1_mode,
         "feedback_mode": feedback_mode,
+        "request_spec_sha256": request_spec_sha256,
     }
     raw = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
@@ -116,6 +168,8 @@ def run_config(
     src_dir = app_dir / "src"
     sites = sorted(detect(src_dir, repo_name=app_dir.name), key=lambda s: (s.file_path, s.line))
 
+    request_spec = backend.request_spec()
+    request_sha = request_spec_digest(request_spec)
     chash = config_hash(
         backend_id=backend.backend_id,
         model_version=backend.model_version,
@@ -128,6 +182,7 @@ def run_config(
         policy_version=policy.version,
         l1_mode=l1_mode,
         feedback_mode=feedback_mode,
+        request_spec_sha256=request_sha,
     )
     run_dir = runs_dir / chash
     sites_dir = run_dir / "sites"
@@ -185,6 +240,11 @@ def run_config(
         "app": app_dir.name,
         "backend_id": backend.backend_id,
         "model_version": backend.model_version,
+        "request_spec": request_spec,
+        "request_spec_sha256": request_sha,
+        "draw_semantics": (
+            "provider-seeded" if request_spec.get("seed_supported") else "requested-draw"
+        ),
         "seeds": list(seeds),
         "k": k,
         "enabled_layers": sorted(layer.name for layer in enabled_layers),
@@ -195,7 +255,7 @@ def run_config(
         "feedback_mode": feedback_mode,
         "ablation": ablation,
         "offline": offline,
-        "git_sha": _git_sha(repo_root),
+        **_git_provenance(repo_root),
         "created_at_utc": datetime.now(UTC).isoformat(),
         "n_sites": len(sites),
         "n_records": len(records),

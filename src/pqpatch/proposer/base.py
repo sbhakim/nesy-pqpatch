@@ -11,7 +11,11 @@ import hashlib
 from abc import ABC, abstractmethod
 
 from pqpatch.model import Context, Patch, Policy
-from pqpatch.proposer.cache import CacheStore
+from pqpatch.proposer.cache import (
+    CacheStore,
+    OfflineCacheMissError,
+    request_spec_digest,
+)
 from pqpatch.proposer.prompting import render_prompt
 from pqpatch.proposer.response_format import parse_response
 from pqpatch.settings import Settings
@@ -39,6 +43,21 @@ class Backend(ABC):
         """
         raise NotImplementedError
 
+    def request_spec(self) -> dict[str, object]:
+        """Effective, non-secret sampling contract for provenance and caching.
+
+        Concrete network adapters override this.  The default describes test
+        or replay adapters and deliberately makes no provider-seed claim.
+        """
+        return {
+            "schema_version": 1,
+            "api_style": "deterministic-adapter",
+            "temperature": None,
+            "top_p": None,
+            "max_tokens": None,
+            "seed_supported": False,
+        }
+
     def propose(
         self,
         context: Context,
@@ -53,18 +72,28 @@ class Backend(ABC):
             context, policy, feedback=feedback, attempt=attempt, prompt_version=prompt_version
         )
         prompt_sha = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+        spec_sha = request_spec_digest(self.request_spec())
         key = self._cache_key(prompt=prompt, seed=seed)
 
-        cached = self._cache.get_or_fetch(
-            key,
-            lambda: self._generate_raw(
-                prompt, seed=seed, site_id=context.site.site_id, attempt=attempt
-            ),
-            backend_id=self.backend_id,
-            model_version=self.model_version,
-            prompt_sha256=prompt_sha,
-            seed=seed,
-        )
+        # New online runs never reuse an entry whose effective parameters are
+        # unknown. Offline replay may fall back to the legacy key so the
+        # published evidence remains auditable without being rewritten.
+        try:
+            cached = self._cache.get(key)
+        except OfflineCacheMissError:
+            cached = self._cache.get(self._legacy_cache_key(prompt=prompt, seed=seed))
+        if cached is None:
+            cached = self._cache.get_or_fetch(
+                key,
+                lambda: self._generate_raw(
+                    prompt, seed=seed, site_id=context.site.site_id, attempt=attempt
+                ),
+                backend_id=self.backend_id,
+                model_version=self.model_version,
+                prompt_sha256=prompt_sha,
+                seed=seed,
+                request_spec_sha256=spec_sha,
+            )
 
         parsed = parse_response(cached.raw_text)
         response_hash = hashlib.sha256(cached.raw_text.encode("utf-8")).hexdigest()
@@ -81,6 +110,17 @@ class Backend(ABC):
         )
 
     def _cache_key(self, *, prompt: str, seed: int) -> str:
+        from pqpatch.proposer.cache import cache_key
+
+        return cache_key(
+            backend_id=self.backend_id,
+            model_version=self.model_version,
+            prompt=prompt,
+            seed=seed,
+            extra=f"request-spec-v1:{request_spec_digest(self.request_spec())}",
+        )
+
+    def _legacy_cache_key(self, *, prompt: str, seed: int) -> str:
         from pqpatch.proposer.cache import cache_key
 
         return cache_key(

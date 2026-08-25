@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from pqpatch.eval.icc_report import ARMS, MODELS, build_report, write_report
 from pqpatch.eval.run import config_hash
 from pqpatch.eval.tables import funnel, load_run, load_runs
 from pqpatch.model import Layer
@@ -74,6 +75,9 @@ def test_config_hash_is_stable_and_order_independent() -> None:
     assert config_hash(seeds=[0], feedback_mode="generic", **base) != config_hash(
         seeds=[0], **base
     )
+    assert config_hash(seeds=[0], request_spec_sha256="new-spec", **base) != config_hash(
+        seeds=[0], **base
+    )
 
 
 def test_load_run_and_load_runs_roundtrip(tmp_path: Path) -> None:
@@ -92,3 +96,72 @@ def test_load_run_and_load_runs_roundtrip(tmp_path: Path) -> None:
     # a stray non-run directory (no manifest) is ignored
     (tmp_path / "not-a-run").mkdir()
     assert len(load_runs(tmp_path)) == 1
+
+
+def test_icc_report_distinguishes_apply_failure_from_analysis_error(tmp_path: Path) -> None:
+    runs = tmp_path / "runs"
+    for model in MODELS:
+        for arm in ARMS:
+            run_id = f"{model}-{arm}"
+            run_dir = runs / run_id
+            (run_dir / "sites").mkdir(parents=True)
+            manifest = {
+                "kind": "trap-run",
+                "config_hash": run_id,
+                "corpus_id": "traps/all",
+                "model_version": model,
+                "prompt_version": arm,
+                "seeds": [0],
+            }
+            (run_dir / "manifest.json").write_text(json.dumps(manifest))
+            # An L2 analysis error is deliberately present on every row. Only
+            # the explicit L3 content-anchored apply flag may enter the
+            # applicability numerator.
+            record = {
+                "trap_id": "t1",
+                "seed": 0,
+                "split": "heldout",
+                "full_status": "reject",
+                "full_reject_kind": "analysis-error",
+                "l3_only_status": "reject",
+                "l3_reject_was_apply_failure": model == MODELS[0] and arm == "v2",
+            }
+            (run_dir / "sites" / "t1__seed0.json").write_text(json.dumps(record))
+
+    traps = tmp_path / "traps" / "heldout"
+    traps.mkdir(parents=True)
+    (traps / "t1.yaml").write_text(
+        """trap_id: t1
+usage_class: sign
+unsafe_class: U1
+split: heldout
+provenance: taxonomy
+unsafe_patch_compiles: true
+caught_by_l3_alone: false
+measured_full_verifier: reject
+measured_catch: L1:PQ-PARAM-01
+target_rule: PQ-PARAM-01
+annotator_labels:
+  - {annotator: a, unsafe: true}
+  - {annotator: b, unsafe: true}
+ground_truth_unsafe: true
+scenario_path: heldout/t1/
+rationale: synthetic
+"""
+    )
+
+    report = build_report(runs_dir=runs, traps_root=tmp_path / "traps")
+    assert report["applicability"]["pooled"]["v2"]["successes"] == 1
+    assert report["applicability"]["pooled"]["v2"]["n"] == 3
+    assert report["validity_gap"]["authored"]["successes"] == 1
+    assert report["proposal_safety"]["status"] == "not-applicable"
+    assert report["proposal_safety"]["pipeline_action_confusion"] is None
+    assert report["rua"]["clustered"]["heldout_v2_majority"]["n_clusters"] == 1
+
+    written = write_report(report, tmp_path / "generated")
+    assert {path.name for path in written} == {
+        "icc_results.json",
+        "icc_results.tex",
+        "independence.csv",
+        "validity_gap.csv",
+    }

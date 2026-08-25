@@ -8,8 +8,9 @@ runs/*
 # Generated results summaries: same rule as runs/ -- regenerate, never commit.
 RESULTS-SNAPSHOT.txt
 
-# Model-response cache payloads. The canonical archive lives on Zenodo
-# (referenced by checksum); the git tree carries only the directory marker.
+# Model-response cache payloads. The git tree carries only the directory
+# marker. A local checksummed development package is produced by `make
+# artifact`; do not claim a public DOI until an immutable deposit exists.
 src/pqpatch/proposer/cache/*
 !src/pqpatch/proposer/cache/.gitkeep
 

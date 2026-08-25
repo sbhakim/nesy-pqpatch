@@ -31,6 +31,8 @@ _VALID: dict[str, object] = {
     "provenance": "taxonomy",
     "unsafe_patch_compiles": True,
     "caught_by_l3_alone": False,
+    "measured_full_verifier": "accept",
+    "measured_catch": None,
     "annotator_labels": [
         {"annotator": "A", "unsafe": True},
         {"annotator": "B", "unsafe": True},
@@ -110,6 +112,18 @@ def test_missing_required_field_rejected(tmp_path: Path) -> None:
 def test_non_boolean_difficulty_flag_rejected(tmp_path: Path) -> None:
     data = {**_VALID, "unsafe_patch_compiles": "yes"}
     with pytest.raises(TrapValidationError, match="must be a boolean"):
+        load_trap(_write(tmp_path, data))
+
+
+def test_measured_reject_requires_catch_attribution(tmp_path: Path) -> None:
+    data = {**_VALID, "measured_full_verifier": "reject"}
+    with pytest.raises(TrapValidationError, match="measured_catch"):
+        load_trap(_write(tmp_path, data))
+
+
+def test_measured_accept_cannot_claim_a_catch(tmp_path: Path) -> None:
+    data = {**_VALID, "measured_catch": "L1:PQ-HYB-01"}
+    with pytest.raises(TrapValidationError, match="measured_catch"):
         load_trap(_write(tmp_path, data))
 
 

@@ -1,5 +1,6 @@
 .PHONY: install lint typecheck test test-unit test-rules test-integration \
-        smoke rules-test corpus-stats reproduce-all artifact clean
+        smoke rules-test corpus-stats reproduce-all icc-report artifact \
+        artifact-verify clean
 
 PYTHON ?= python
 
@@ -21,7 +22,7 @@ test-rules:
 	pytest tests/rules -v
 
 test-integration:
-	pytest tests/integration -v -m integration
+	pytest tests/integration -v
 
 # Phase-0 exit criterion (codebase-plan.md §5): detector(stub) -> proposer(replay)
 # -> verifier(L1) -> trace, end to end, offline.
@@ -42,6 +43,12 @@ table-detection:
 # the .tex row fragments a results pass would \input.
 tables:
 	PQPATCH_OFFLINE=1 $(PYTHON) -m pqpatch.eval.tables --latex-dir runs/_latex
+
+# ICC paper quantities, figure inputs, and TeX macros from the six adjudicated
+# seed-0 trap grids. The generator hard-fails on missing runs or labels.
+icc-report:
+	PQPATCH_OFFLINE=1 $(PYTHON) -m pqpatch.eval.icc_report \
+		--out-dir ../Manuscript-ICC/generated
 
 # Regenerate the Tier-1 mutated surface (needs tier1/original intake first).
 tier1-mutate:
@@ -68,10 +75,15 @@ archive-list:
 # Prove the determinism boundary holds: every committed run must regenerate
 # from the cache with the network disabled.
 verify-offline:
-	PQPATCH_OFFLINE=1 $(PYTHON) -m pqpatch.eval.tables
+	PQPATCH_OFFLINE=1 $(PYTHON) -m pqpatch.eval.verify_evidence
 
 artifact:
-	@echo "Packaging deferred to Phase 8 (codebase-plan.md §5)." && exit 1
+	PQPATCH_OFFLINE=1 $(PYTHON) -m pqpatch.eval.artifact \
+		--out dist/pqpatch-icc-evidence.zip
+
+artifact-verify:
+	$(PYTHON) -m pqpatch.eval.artifact \
+		--verify dist/pqpatch-icc-evidence.zip
 
 clean:
 	find . -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true

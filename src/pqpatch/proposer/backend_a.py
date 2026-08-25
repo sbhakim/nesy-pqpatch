@@ -39,6 +39,16 @@ class BackendA(Backend):
         # Explicit arg wins; otherwise the env-configured endpoint (settings).
         self._base_url = base_url or settings.backend_a_base_url
 
+    def request_spec(self) -> dict[str, object]:
+        return {
+            "schema_version": 1,
+            "api_style": "openai-chat-completions",
+            "temperature": 0.2,
+            "top_p": None,
+            "max_tokens": None,
+            "seed_supported": True,
+        }
+
     def _generate_raw(
         self, prompt: str, *, seed: int, site_id: str, attempt: int
     ) -> tuple[str, int]:

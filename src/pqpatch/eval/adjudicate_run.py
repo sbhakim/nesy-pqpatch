@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from pqpatch.detector.api import detect
-from pqpatch.eval.adjudicate import record_labels
+from pqpatch.eval.adjudicate import proposal_id, record_labels
 from pqpatch.eval.llm_judge import (
     DEFAULT_JUDGE_MODELS,
     Judgment,
@@ -78,6 +78,8 @@ def judge_accepted(
     specs = {s.trap_id: s for s in load_trap_suite(traps_root)}
 
     records = [json.loads(p.read_text()) for p in sorted((run_dir / "sites").glob("*.json"))]
+    manifest_path = run_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
     accepted = [r for r in records if r.get("needs_adjudication")]
 
     by_judge: dict[str, dict[str, bool]] = {j: {} for j in judges}
@@ -87,6 +89,7 @@ def judge_accepted(
 
     for rec in accepted:
         trap_id = rec["trap_id"]
+        pid = proposal_id(rec, manifest)
         spec = specs.get(trap_id)
         if spec is None:
             raise AdjudicationRunError(f"{trap_id}: accepted record has no trap descriptor")
@@ -103,17 +106,24 @@ def judge_accepted(
             try:
                 votes.append(parse_judgment(model, call(model, prompt)))
             except Exception as exc:  # noqa: BLE001 -- refusal or transport, both recorded
-                refusals.append({"trap_id": trap_id, "judge": model, "reason": repr(exc)[:300]})
+                refusals.append(
+                    {
+                        "proposal_id": pid,
+                        "trap_id": trap_id,
+                        "judge": model,
+                        "reason": repr(exc)[:300],
+                    }
+                )
 
         if len(votes) < _MIN_VOTES:
             # One model's opinion is not a label. Left unlabelled on purpose so
             # trap_outcomes refuses to compute RUA until it is resolved.
-            undecided.append(trap_id)
+            undecided.append(pid)
             continue
 
         for judgment in votes:
-            by_judge[judgment.model][trap_id] = judgment.unsafe
-        rationales[trap_id] = [
+            by_judge[judgment.model][pid] = judgment.unsafe
+        rationales[pid] = [
             {"judge": j.model, "unsafe": str(j.unsafe), "reason": j.reason} for j in votes
         ]
 

@@ -12,7 +12,7 @@ import gzip
 import hashlib
 import json
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -32,6 +32,19 @@ class CachedResponse:
     duration_ms: float
     token_count: int
     fetched_at_utc: str
+    # None identifies a legacy entry whose effective request parameters were
+    # not recorded; never backfill a digest by inference.
+    request_spec_sha256: str | None = None
+
+
+def canonical_request_spec(spec: Mapping[str, object]) -> str:
+    """Canonical JSON for the effective, non-secret model request contract."""
+    return json.dumps(spec, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+
+
+def request_spec_digest(spec: Mapping[str, object]) -> str:
+    """Stable digest used in new cache keys and run manifests."""
+    return hashlib.sha256(canonical_request_spec(spec).encode("utf-8")).hexdigest()
 
 
 def cache_key(
@@ -98,6 +111,7 @@ class CacheStore:
         model_version: str,
         prompt_sha256: str,
         seed: int,
+        request_spec_sha256: str | None = None,
     ) -> CachedResponse:
         """Return the cached response, invoking fetch() only on a genuine
         miss while online. fetch() returns (raw_text, token_count)."""
@@ -118,6 +132,7 @@ class CacheStore:
             duration_ms=duration_ms,
             token_count=token_count,
             fetched_at_utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            request_spec_sha256=request_spec_sha256,
         )
         self.put(key, response)
         return response

@@ -13,7 +13,10 @@ from pqpatch.eval.ablations import ABLATIONS, get_ablation
 from pqpatch.eval.adjudicate import (
     AdjudicationError,
     pending,
+    pending_proposals,
+    proposal_id,
     record_labels,
+    record_proposal_labels,
     trap_outcomes,
 )
 from pqpatch.eval.metrics import residual_unsafe_accept_rate
@@ -72,6 +75,63 @@ def test_protocol_refusals(tmp_path: Path) -> None:
     record_labels(run, {"t-accept-safe": False}, annotator="A")
     with pytest.raises(AdjudicationError, match="already labeled"):
         record_labels(run, {"t-accept-safe": False}, annotator="A")  # no relabeling
+
+
+def test_proposal_ids_are_stable_and_separate_draws() -> None:
+    manifest = {"model_version": "model-a", "prompt_version": "v2"}
+    base = {"trap_id": "trap", "seed": 0, "response_hash": "abc"}
+    assert proposal_id(base, manifest) == proposal_id(dict(reversed(list(base.items()))), manifest)
+    assert proposal_id(base, manifest) != proposal_id({**base, "seed": 1}, manifest)
+    assert proposal_id(base, manifest) != proposal_id(
+        base, {**manifest, "model_version": "model-b"}
+    )
+
+
+def test_status_neutral_labels_include_symbolic_rejections(tmp_path: Path) -> None:
+    run = _run_dir(tmp_path)
+    symbolic = {
+        "trap_id": "t-symbolic",
+        "seed": 0,
+        "response_hash": "symbolic-response",
+        "full_status": "reject",
+        "l3_only_status": "accept",
+        "needs_adjudication": False,
+    }
+    (run / "sites" / "t-symbolic__seed0.json").write_text(json.dumps(symbolic))
+    pid = proposal_id(symbolic)
+
+    assert pid in pending_proposals(run)
+    record_proposal_labels(run, {pid: "unsafe"}, annotator="expert-a")
+    assert pid not in pending_proposals(run)
+    stored = json.loads((run / "proposal_labels.json").read_text())
+    assert stored["proposals"][pid]["labels"][0]["label"] == "unsafe"
+    assert stored["proposals"][pid]["trap_id"] == "t-symbolic"
+
+
+def test_repeated_draws_refuse_ambiguous_legacy_label_key(tmp_path: Path) -> None:
+    run = _run_dir(tmp_path)
+    first = {
+        "trap_id": "t-repeat",
+        "seed": 0,
+        "response_hash": "response-0",
+        "full_status": "accept",
+        "l3_only_status": "accept",
+        "needs_adjudication": True,
+    }
+    second = {**first, "seed": 1, "response_hash": "response-1"}
+    (run / "sites" / "t-repeat__seed0.json").write_text(json.dumps(first))
+    (run / "sites" / "t-repeat__seed1.json").write_text(json.dumps(second))
+
+    with pytest.raises(AdjudicationError, match="ambiguous legacy trap id"):
+        record_proposal_labels(run, {"t-repeat": "unsafe"}, annotator="expert-a")
+
+    first_id, second_id = proposal_id(first), proposal_id(second)
+    record_proposal_labels(
+        run,
+        {first_id: "unsafe", second_id: "safe"},
+        annotator="expert-a",
+    )
+    assert first_id != second_id
 
 
 def test_ablation_registry_shape() -> None:

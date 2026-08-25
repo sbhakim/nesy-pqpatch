@@ -63,8 +63,8 @@ The figure above is the system. One pass, left to right:
      must reach a combiner and a KDF.
    - **L3 — build + test**: the patched project compiles and its own test
      suite passes (declarative `build.yaml`, content-anchored diff applier).
-   - **L4 — conformance**: round-trip, NIST ACVP vectors, cross-provider
-     interop *(interfaces present; implementation pending a PQC runtime)*.
+   - **L4 — conformance**: JDK 24 ML-KEM/ML-DSA round trips are implemented;
+     NIST ACVP vectors and cross-provider interoperability remain explicit stubs.
 4. **Repair or escalate.** A rejection returns the violated rule's rationale
    to the model for another attempt, at most `k = 3`, then the site escalates
    to human review. Every verdict records exactly which layers ran.
@@ -122,21 +122,31 @@ Key environment variables (read only by `settings.py`):
 Everything downstream of the model call is deterministic. Model responses are
 cached under a digest of *(model, version, prompt bytes, seed)*; offline mode
 is read-only by construction, so published numbers regenerate with no API
-access, no network, and no GPU. Results are generated **exclusively** from
-`runs/` manifests — the table generator refuses to emit a row it cannot back,
-and no result number in the repository or the paper is ever typed by hand.
+access, no network, and no GPU. ICC results are generated from `runs/`
+manifests, blind adjudications, and measured trap descriptors; the generator
+refuses to emit while a required run or accepted-patch label is missing.
 
 ```bash
 make reproduce-all      # corpus state · RQ0 detection scoring · manifest tables
 make table-detection    # detector precision/recall vs. Tier-2 ground truth
 make tables             # capability-funnel + trap summaries, and .tex fragments
+make icc-report         # ICC JSON, figure CSVs, and TeX result macros
+make verify-offline     # replay cached ICC responses and verifier decisions
+make artifact           # deterministic checksummed development evidence ZIP
+make artifact-verify    # verify every packaged member against its manifest
 ```
+
+`make artifact` packages the selected runs, required response cache, source
+snapshot, and manuscript inputs. It records a dirty-worktree marker when
+applicable. This local package is not a Zenodo release and carries no DOI until
+it is deposited in an immutable public repository.
 
 Ablation arms are named, frozen definitions (`pqpatch.eval.ablations`):
 `full`, `remove-l2`, `l3-only`, `no-repair`, `generic-feedback`, `stock-l1`.
-Residual unsafe-accept rates additionally require human adjudication of every
-accepted trap proposal (`pqpatch.eval.adjudicate`) — the harness refuses to
-compute RUA while any acceptance is unlabeled.
+Residual unsafe-accept rates require blind adjudication of every accepted trap
+proposal (`pqpatch.eval.adjudicate`). The present study uses three disclosed,
+proposer-disjoint LLM judges; the harness refuses to compute RUA while any
+acceptance is unlabeled.
 
 ## Repository layout
 
@@ -152,15 +162,15 @@ compute RUA while any acceptance is unlabeled.
 
 ## Evaluation design
 
-Three corpus tiers plus an adversarial suite: **Tier 1** extends
+Two realized corpus tiers plus an adversarial suite: **Tier 1** extends
 CryptoAPI-Bench with reference migrations, and every case also exists in a
 semantics-preserving *mutated-surface* variant (`corpus/tier1/mutate.py`) so
 memorization shows up as a reported gap rather than an inflated score;
-**Tier 2** is a set of purpose-built applications with exact, detector-confirmed
-ground truth and real test suites; **Tier 3** samples permissively licensed
-projects in the wild. The **trap suite** contains scenarios engineered so the
+**Tier 2** is five purpose-built applications with 35 seeded sites, exact,
+detector-confirmed ground truth, and real test suites. Tier 3 is deferred. The
+**trap suite** contains 21 scenarios engineered so the
 *plausible* completion is unsafe, with per-trap provenance (taxonomy vs.
-external PR/CVE), two-annotator blind labels, a difficulty control separating
+external PR/CVE), three-model blind labels, a difficulty control separating
 what a compiler would already catch, and a held-out subset authored after rule
 freeze — the pre-registered primary endpoint.
 
@@ -168,9 +178,10 @@ freeze — the pre-registered primary endpoint.
 
 A research artifact under active development. `docs/STATUS.md` is the
 authoritative ledger of what is implemented versus specified; architecture
-decisions, including open ones, live in `docs/ADR/`. **No experimental result
-numbers exist in this repository yet, by design** — the manuscript's result
-cells remain placeholders until backed by immutable run manifests.
+decisions, including open ones, live in `docs/ADR/`. The seed-0 ICC grid is
+complete for three backends and two prompt arms. Runs and response payloads are
+gitignored evidence artifacts; `make icc-report` regenerates manuscript inputs
+and `make verify-offline` proves the cached decisions replay.
 
 ## Citation
 

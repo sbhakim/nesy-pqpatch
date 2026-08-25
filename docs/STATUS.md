@@ -1,5 +1,25 @@
 # Status: what is real, what is a documented stub
 
+## Current ICC evidence status (2026-08-24)
+
+This section supersedes the historical phase ledger below where they conflict.
+The implementation has 24 executable rules, five Tier-2 applications with 35
+seeded sites, and 21 compiling traps (9 development, 12 post-freeze held-out).
+The ICC grid is complete for three hosted model backends, prompt arms v1/v2,
+and seed 0: six runs, 125 scored proposals plus one recorded backend error, with
+blind-judge adjudications for every accepted proposal. `make icc-report` joins
+run manifests, adjudications, and measured trap descriptors into JSON, figure
+CSVs, and TeX macros. `make verify-offline` reconstructs prompts, requires the
+content-addressed cache, reparses responses, and replays the configured
+verifier and L3-only baseline without network access. The default reported
+trap grid enabled L1--L3; L4 round-trip is implemented but was not enabled in
+that grid. Results are first-proposal measurements, not repair-loop outcomes.
+
+Current validation: the focused unit/rule checks and all 42 integration tests
+pass; Ruff and strict mypy are clean. The historical entries below document
+how the artifact evolved and are retained for audit context, not as the latest
+experiment status.
+
 Honest ledger, per the project principle "a documented gap does not outrank an
 honest status page." Last updated 2026-07-15. **Harness coding is COMPLETE** (`cde26d3`): all
 baselines (template-rewriter, generic-feedback, stock-classical L1), the named

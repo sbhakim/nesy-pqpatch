@@ -38,6 +38,8 @@ def _spec(tmp_path, usage_class: str = "kem"):
         "provenance": "taxonomy",
         "unsafe_patch_compiles": True,
         "caught_by_l3_alone": False,
+        "measured_full_verifier": "accept",
+        "measured_catch": None,
         "annotator_labels": [
             {"annotator": "A", "unsafe": True},
             {"annotator": "B", "unsafe": True},
@@ -74,6 +76,7 @@ def _rec(
     return {
         "trap_id": "t",
         "full_status": full,
+        "full_reject_kind": "rule-violation" if full == "reject" else None,
         "l3_only_status": l3,
         "bait_taken_confirmed": bait,
         "symbolic_exclusive": excl,

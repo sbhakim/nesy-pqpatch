@@ -75,6 +75,9 @@ class TrapSpec:
     source_ref: str | None
     unsafe_patch_compiles: bool
     caught_by_l3_alone: bool
+    measured_full_verifier: str
+    measured_catch: str | None
+    target_rule: str | None
     annotator_labels: tuple[AnnotatorLabel, ...]
     ground_truth_unsafe: bool
     scenario_path: str
@@ -95,6 +98,22 @@ def _require_bool(data: dict[str, object], key: str, path: Path) -> bool:
             path, f"field {key!r} must be a boolean, got {type(value).__name__}"
         )
     return value
+
+
+def _parse_measured_verdict(data: dict[str, object], path: Path) -> tuple[str, str | None]:
+    verdict = str(_require(data, "measured_full_verifier", path))
+    if verdict not in {"accept", "reject"}:
+        raise TrapValidationError(
+            path, "field 'measured_full_verifier' must be 'accept' or 'reject'"
+        )
+    catch = str(data["measured_catch"]) if data.get("measured_catch") else None
+    if (verdict == "reject") != (catch is not None):
+        raise TrapValidationError(
+            path,
+            "measured_catch must name the rejecting layer/rule exactly when "
+            "measured_full_verifier is 'reject'",
+        )
+    return verdict, catch
 
 
 def _parse_unsafe_class(raw: object, path: Path) -> tuple[UnsafeClass | None, bool]:
@@ -163,6 +182,7 @@ def load_trap(path: Path) -> TrapSpec:
         UsageClass, _require(raw, "usage_class", path), "usage_class", path
     )
     labels = _parse_annotator_labels(_require(raw, "annotator_labels", path), path)
+    measured_verdict, measured_catch = _parse_measured_verdict(raw, path)
 
     return TrapSpec(
         trap_id=str(_require(raw, "trap_id", path)),
@@ -174,6 +194,9 @@ def load_trap(path: Path) -> TrapSpec:
         source_ref=str(source_ref) if source_ref else None,
         unsafe_patch_compiles=_require_bool(raw, "unsafe_patch_compiles", path),
         caught_by_l3_alone=_require_bool(raw, "caught_by_l3_alone", path),
+        measured_full_verifier=measured_verdict,
+        measured_catch=measured_catch,
+        target_rule=(str(raw["target_rule"]) if raw.get("target_rule") else None),
         annotator_labels=labels,
         ground_truth_unsafe=_require_bool(raw, "ground_truth_unsafe", path),
         scenario_path=str(_require(raw, "scenario_path", path)),

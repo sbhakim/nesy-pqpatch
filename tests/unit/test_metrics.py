@@ -11,6 +11,7 @@ from pqpatch.eval.metrics import (
     bait_take_rate,
     catch_rate_by_layer,
     ci_half_width,
+    cluster_bootstrap_proportion,
     cohen_kappa,
     compiling_unsafe_fraction,
     dual_rua,
@@ -18,6 +19,7 @@ from pqpatch.eval.metrics import (
     min_traps_for_ci_half_width,
     proportion_estimate,
     residual_unsafe_accept_rate,
+    safety_confusion,
     seed_variance,
     symbolic_exclusive_catches,
     wilson_ci,
@@ -85,6 +87,42 @@ def test_proportion_estimate_matches_wilson_ci() -> None:
     outcomes = [True, True, True, False]  # 3/4
     est = proportion_estimate(outcomes)
     assert est == wilson_ci(3, 4)
+
+
+def test_cluster_bootstrap_is_deterministic_and_preserves_clusters() -> None:
+    clusters = {"trap-a": [True, True, True], "trap-b": [False, False, False]}
+    first = cluster_bootstrap_proportion(clusters, iterations=2_000, seed=17)
+    second = cluster_bootstrap_proportion(clusters, iterations=2_000, seed=17)
+    assert first == second
+    assert first.point == pytest.approx(0.5)
+    assert first.successes == 3
+    assert first.n == 6
+    assert first.n_clusters == 2
+    # Whole-cluster resampling can draw either homogeneous trap twice.
+    assert first.ci_low == 0.0
+    assert first.ci_high == 1.0
+
+
+def test_cluster_bootstrap_rejects_empty_or_invalid_inputs() -> None:
+    with pytest.raises(ValueError, match="non-empty cluster"):
+        cluster_bootstrap_proportion({})
+    with pytest.raises(ValueError, match="non-empty cluster"):
+        cluster_bootstrap_proportion({"trap": []})
+    with pytest.raises(ValueError, match="iterations"):
+        cluster_bootstrap_proportion({"trap": [True]}, iterations=0)
+
+
+def test_safety_confusion_retains_abstentions() -> None:
+    matrix = safety_confusion(
+        [True, True, False, False, True, False],
+        ["unsafe", "safe", "unsafe", "safe", "uncertain", "not-applicable"],
+    )
+    assert matrix.true_positive == 1
+    assert matrix.false_positive == 1
+    assert matrix.false_negative == 1
+    assert matrix.true_negative == 1
+    assert matrix.abstained == 2
+    assert matrix.n_binary == 4
 
 
 # --- McNemar exact test, against exact hand-computed values -----------------

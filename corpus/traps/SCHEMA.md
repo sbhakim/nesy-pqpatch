@@ -19,15 +19,17 @@ source_ref: "github.com/org/repo#1234"   # required unless provenance == taxonom
 # --- difficulty control (U-D) --------------------------------------------
 unsafe_patch_compiles: true      # does the bad completion survive a build?
 caught_by_l3_alone: false        # would build+test alone have rejected it?
+measured_full_verifier: reject   # measured accept | reject on authored bad patch
+measured_catch: L1:PQ-HYB-01     # rejecting layer/rule; null exactly on accept
+target_rule: PQ-HYB-01           # intended probe (optional; may differ from catch)
 
 # --- blind labeling (U-C: construct validity) ----------------------------
-annotator_labels:                # >= 2 independent unsafe/safe labels
-  - annotator: A
+annotator_labels:                # >= 2 independent blind-judge labels
+  - annotator: gpt-5.1
     unsafe: true
-  - annotator: B
+  - annotator: claude-opus-5
     unsafe: true
-ground_truth_unsafe: true        # adjudicated label; kappa is computed over the
-                                 # annotator_labels across the whole suite
+ground_truth_unsafe: true        # adjudicated label; retain every judge vote
 
 scenario_path: heldout/hyb-downgrade-tls-003/   # the code + context fixture
 rationale: >
@@ -49,24 +51,23 @@ rationale: >
 - **`caught_by_l3_alone`** feeds `metrics.symbolic_exclusive_catches`: the
   cleanest evidence the symbolic layers are load-bearing is the count of
   *compiling* traps that L3-alone misses and the full verifier catches.
-- **`annotator_labels`** feed `metrics.cohen_kappa`. A trap whose annotators
-  disagree is adjudicated (and the disagreement retained) rather than silently
-  relabeled; the pre-registered construct-validity bar is kappa >= ~0.7.
+- **`measured_full_verifier` / `measured_catch`** record the frozen verifier's
+  measured decision on the authored unsafe completion. A reject must name its
+  layer and rule; an accept must use `null`. `target_rule` records what the
+  scenario intended to probe without rewriting what actually caught it.
+- **`annotator_labels`** are independent blind LLM-judge labels, not human
+  annotation. Disagreement and rationales are retained. Because the suite is
+  unsafe by construction, label marginals are degenerate and Cohen's kappa is
+  misleading; report unanimous-trap fraction and agreement over all judge
+  pairs instead.
 
 ## Current state
 
-The rule set is **frozen at 24 rules** (16 L1 + 8 L2) as of 2026-07-14, so
-authoring the trap suite no longer risks overfitting to an unfinished taxonomy
-(the circularity §12.2 warns against). Authoring is **unblocked and in
-progress**: descriptors are validated on load by `pqpatch.eval.traps`
-(`load_trap_suite` / `summarize_suite`) — a malformed trap is a hard error, and
-`corpus_stats` reports the split, provenance mix, compiling fraction, and blind-
-label kappa from disk. A seed `dev/` trap (`hyb-downgrade-envelope-001`) is
-committed as the template, and the `dev/` set now covers all seven unsafe
-classes (one trap per class). The `rules-v1.0` tag is pushed (2026-07-15), so
-the CI guard in `.github/workflows/ci.yml` is live: PRs touching `heldout/` are
-refused — held-out authoring is unblocked and protected.
-
-`metrics.min_traps_for_ci_half_width` sizes the held-out set: the target is the
-smallest set whose Wilson half-width on a zero-residual outcome is defensible
-(≈25–30, versus the ~12 the manuscript originally committed to).
+The rule set is **frozen at 24 rules** (16 L1 + 8 L2). The realized suite has
+**9 development traps and 12 post-freeze held-out traps**, all compiling and
+all independently labeled by three blind LLM judges. Descriptors are validated
+on load by `pqpatch.eval.traps`; malformed or internally inconsistent measured
+outcomes are hard errors. `corpus_stats` reports split, provenance, compiling
+fraction, unanimous-trap fraction, and agreement over all judge pairs. The
+held-out size remains modest, so manuscript results report Wilson intervals
+and explicitly treat seed variance as uncharacterized.

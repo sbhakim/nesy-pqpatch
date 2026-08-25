@@ -8,7 +8,13 @@ from pathlib import Path
 
 import pytest
 
-from pqpatch.proposer.cache import CachedResponse, CacheStore, OfflineCacheMissError, cache_key
+from pqpatch.proposer.cache import (
+    CachedResponse,
+    CacheStore,
+    OfflineCacheMissError,
+    cache_key,
+    request_spec_digest,
+)
 
 
 def test_cache_key_is_deterministic() -> None:
@@ -32,6 +38,24 @@ def test_cache_key_has_no_ambiguous_field_concatenation() -> None:
     k1 = cache_key(backend_id="ab", model_version="c", prompt="x", seed=0)
     k2 = cache_key(backend_id="a", model_version="bc", prompt="x", seed=0)
     assert k1 != k2
+
+
+def test_request_spec_digest_is_canonical_and_parameter_sensitive() -> None:
+    first = {"schema_version": 1, "temperature": 0.2, "seed_supported": True}
+    reordered = dict(reversed(list(first.items())))
+    assert request_spec_digest(first) == request_spec_digest(reordered)
+    assert request_spec_digest(first) != request_spec_digest(
+        {**first, "temperature": 0.0}
+    )
+
+
+def test_request_spec_digest_separates_new_cache_keys() -> None:
+    first = request_spec_digest({"schema_version": 1, "temperature": 0.2})
+    second = request_spec_digest({"schema_version": 1, "temperature": 0.0})
+    base = dict(backend_id="a", model_version="m1", prompt="hello", seed=0)
+    assert cache_key(**base, extra=f"request-spec-v1:{first}") != cache_key(
+        **base, extra=f"request-spec-v1:{second}"
+    )
 
 
 def _response(text: str = "hello") -> CachedResponse:
@@ -95,3 +119,11 @@ def test_cache_is_sharded_by_key_prefix(tmp_path: Path) -> None:
     key = "abcdef0123456789"
     store.put(key, _response())
     assert (tmp_path / key[:2] / f"{key}.json.gz").exists()
+
+
+def test_legacy_cache_payload_without_request_spec_still_loads(tmp_path: Path) -> None:
+    store = CacheStore(tmp_path, offline=False)
+    store.put("legacy", _response())
+    got = store.get("legacy")
+    assert got is not None
+    assert got.request_spec_sha256 is None

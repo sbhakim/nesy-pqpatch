@@ -46,6 +46,16 @@ class BackendC(Backend):
         # seed, so each seed remains a distinct, separately cached draw.
         self._send_seed = send_seed
 
+    def request_spec(self) -> dict[str, object]:
+        return {
+            "schema_version": 1,
+            "api_style": "openai-compatible-chat-completions",
+            "temperature": 0.2,
+            "top_p": None,
+            "max_tokens": None,
+            "seed_supported": self._send_seed,
+        }
+
     def _generate_raw(
         self, prompt: str, *, seed: int, site_id: str, attempt: int
     ) -> tuple[str, int]:
