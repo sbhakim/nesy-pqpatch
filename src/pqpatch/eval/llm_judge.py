@@ -1,35 +1,21 @@
 """LLM-as-judge labelling of trap scenarios.
 
-The trap suite needs a ground-truth answer to one question per scenario: *is
-the plausible migration completion unsafe under policy Pi?* This module obtains
-that label from language models rather than people, and the distinction is
-load-bearing for how it may be reported.
+Each trap needs one answer: is the plausible migration completion unsafe under
+policy Pi? That label comes from language models here, not from people, so any
+number built on it -- agreement rates included -- has to be reported as
+inter-*model* agreement, never as human annotation or a human kappa.
 
-**These are AI judges, not human annotators.** Any number derived from them --
-agreement rates included -- must be described in the manuscript as
-inter-*model* agreement produced by named LLM judges. Reporting them as human
-annotation, or as a human inter-annotator kappa, would misstate the method.
+Three properties keep the labels defensible. Judges are blind: they see the
+pre-migration fixture, the patch, and the policy, never the trap id, its unsafe
+class, provenance, or the rule it targets. Judges are disjoint from the
+proposers, since a model grading its own patches is circular --
+`assert_judges_disjoint` enforces that at call time. And they span vendors,
+which is weaker evidence than independent humans but stronger than several
+sizes of one model family, whose errors correlate.
 
-Three properties keep the labels defensible:
-
-- **Blind.** The judge sees the pre-migration fixture, the candidate patch, and
-  the policy. It never sees the trap id, its unsafe class, its rationale, its
-  provenance, the rule it targets, or any prior measurement -- the same leak
-  discipline the fixtures themselves are held to.
-- **Disjoint from the proposers.** A model that proposes patches must not also
-  judge them; that is circular. `DEFAULT_JUDGE_MODELS` is deliberately disjoint
-  from the proposer set, and `assert_judges_disjoint` enforces it at call time.
-- **Independent across vendors.** Judges from different vendors are weaker
-  evidence than independent humans but stronger than several sizes of one
-  family, whose errors correlate.
-
-The known limitation, which belongs in the manuscript's threats to validity:
-LLM judges share training-data and alignment biases, so high agreement between
-them may reflect a common prior rather than correctness. Agreement here bounds
-reproducibility of the labelling, not its truth.
-
-Transport is injected (`JudgeFn`), so the suite exercises this module without
-network access.
+The limitation worth stating plainly: LLM judges share training and alignment
+biases, so agreement between them bounds how reproducible the labelling is, not
+how correct. Transport is injected (`JudgeFn`), so tests run without network.
 """
 
 from __future__ import annotations

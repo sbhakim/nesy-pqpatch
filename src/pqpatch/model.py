@@ -1,8 +1,7 @@
 """Core data model.
 
-All cross-module payloads are frozen dataclasses defined here. Immutability
-is load-bearing: the trace recorder hashes these values, so nothing
-downstream may revise a fact after it has been recorded.
+Every cross-module payload is a frozen dataclass. The trace recorder hashes
+these values, so nothing downstream can revise a fact after it is recorded.
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from pathlib import Path
 
 
 class UsageClass(enum.StrEnum):
-    """The five usage classes of Manuscript-ACM/main.tex Sec. 4 (Formal Task Definition)."""
+    """What a call site is used for; determines which policy floor applies."""
 
     SIGN = "sign"
     VERIFY = "verify"
@@ -23,7 +22,7 @@ class UsageClass(enum.StrEnum):
 
 
 class UnsafeClass(enum.StrEnum):
-    """The seven unsafe-patch classes U1-U7 (Manuscript-ACM/main.tex Sec. 3.1)."""
+    """The seven ways a migration patch can be unsafe."""
 
     U1_PARAM_WEAKENING = "U1"
     U2_CLASSICAL_FALLBACK = "U2"
@@ -35,7 +34,7 @@ class UnsafeClass(enum.StrEnum):
 
 
 class Layer(enum.IntEnum):
-    """Verifier layers in evaluation order (manuscript Eq. 1)."""
+    """Verifier layers, in the order they run."""
 
     L1_SYNTACTIC = 1
     L2_DATAFLOW = 2
@@ -54,7 +53,7 @@ class VerdictStatus(enum.StrEnum):
     ACCEPT = "accept"
     REJECT = "reject"
     ESCALATE = "escalate"
-    ERROR = "error"  # per-site pipeline failure; codebase-plan.md §4 "errors are records"
+    ERROR = "error"  # per-site pipeline failure; recorded, never dropped
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,7 +202,7 @@ class TraceRecord:
 
 @dataclass(frozen=True, slots=True)
 class RunManifest:
-    """Written beside every runs/<config-hash>/ directory (codebase-plan.md invariant 4)."""
+    """Written beside every runs/<config-hash>/ directory."""
 
     config_hash: str
     config_path: Path

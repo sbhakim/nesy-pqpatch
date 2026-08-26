@@ -1,27 +1,22 @@
 """Proposal identities, independent safety labels, and legacy RUA labels.
 
-The trap harness (eval/trap_run.py) deliberately never decides whether an
-ACCEPTED proposal is unsafe: that label comes from independent judges reading
-the stored diff against the trap's ground truth. This module is where those labels land
-and where RUA finally becomes computable:
+The trap harness (eval/trap_run.py) never decides whether an ACCEPTED proposal
+is unsafe -- that label comes from independent judges reading the stored diff
+against the trap's ground truth. This is where those labels land, and where RUA
+becomes computable.
 
-- ``proposal_id(record, manifest)`` identifies one proposal across file moves;
-- ``pending_proposals(run_dir)`` lists all L3-applicable proposals needing an
-  independent, status-neutral safety label;
-- ``record_proposal_labels(...)`` writes those labels to
-  ``proposal_labels.json`` without consulting the full-verifier decision;
-- ``pending(run_dir)`` lists accepted records still needing a legacy RUA label;
-- ``record_labels(run_dir, labels, annotator)`` writes them into the run's
-  ``adjudications.json`` (append-safe: an existing label by the same annotator
-  for the same trap is an error, not an overwrite);
-- ``trap_outcomes(run_dir)`` joins records with adjudications into the
-  TrapOutcome shape metrics.residual_unsafe_accept_rate consumes -- and
-  refuses (loudly) while any accepted record is still unlabeled, so a partial
-  adjudication can never masquerade as an RUA number.
+``proposal_id`` identifies one proposal across file moves. ``pending_proposals``
+lists the L3-applicable proposals still needing a status-neutral safety label,
+and ``record_proposal_labels`` writes them without consulting the verifier's own
+decision. ``pending`` and ``record_labels`` cover the older RUA path, appending
+to ``adjudications.json``; re-labelling the same trap as the same annotator is an
+error rather than a silent overwrite. ``trap_outcomes`` joins records with
+adjudications and refuses loudly while any accepted record is unlabeled, so a
+half-finished adjudication cannot pass for an RUA number.
 
-The proposal-label path is deliberately broader than the legacy RUA path.  A
-symbolic rejection that L3 accepts is eligible for independent safety labeling:
-otherwise the verifier would define both the prediction and the ground truth.
+The proposal-label path is the broader of the two on purpose: a symbolic
+rejection that L3 accepts still deserves an independent label, or the verifier
+would be defining both the prediction and the ground truth.
 """
 
 from __future__ import annotations

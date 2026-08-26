@@ -1,10 +1,10 @@
 """Tree-sitter-backed intraprocedural Java def-use.
 
-The frontend extracts structural invocation, assignment, branch, and return
-events. Two analyses are built on it: verification-result use (``PQ-VER-01``)
-and cross-family key flow (``PQ-KEY-02``). The analysis remains deliberately
-local: unsupported syntax and parse errors are indeterminate, never silently
-accepted as proof.
+The frontend extracts invocation, assignment, branch, and return events; the
+analyses built on it cover verification-result use (``PQ-VER-01``) and
+cross-family key flow (``PQ-KEY-02``). It stays local on purpose. Syntax it does
+not handle, and parse errors, come back indeterminate -- never quietly accepted
+as proof.
 """
 
 from __future__ import annotations

@@ -2,11 +2,10 @@
 record, per trap, what the full verifier and an L3-only (build-and-test) gate
 each decide about the *same* first proposal.
 
-This produces the mechanical half of the RQ2 evidence (manuscript Table
-"trap-suite results"): the L3-only-vs-full comparison, catch attribution by
-rule and layer, and the symbolic-exclusive count -- unsafe proposals a build
-gate accepts that the rule layers reject. Two facts are deliberately *not*
-decided here, because deciding them mechanically would be circular:
+It produces the mechanical half of the evidence: the L3-only-vs-full
+comparison, catch attribution by rule and layer, and the symbolic-exclusive
+count -- unsafe proposals a build gate accepts that the rule layers reject. Two
+facts are left undecided here, because deciding them mechanically is circular:
 
 - **Bait-take** is only lower-bounded: a proposal rejected by a rule of the
   trap's own unsafe class demonstrably took the bait; an accepted proposal may

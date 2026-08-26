@@ -1,19 +1,13 @@
 """Trap-suite loader and validator.
 
-The metrics in :mod:`pqpatch.eval.metrics` (RUA, dual-RUA, Cohen's kappa,
-symbolic-exclusive catches) all consume *evaluated* trap outcomes, but nothing
-turned the on-disk SCHEMA-v2 YAML into typed, validated specs. This module is
-that missing piece: it parses every trap descriptor under ``corpus/traps/``,
-enforces the schema's structural invariants loudly (a malformed trap is a hard
-error, never a silently dropped record), and exposes the suite-level facts the
-paper's construct-validity story rests on -- the dev/held-out split, the
-provenance mix (taxonomy vs. external), and the two-annotator label vectors that
-feed the pre-registered kappa bar.
+Turns the SCHEMA-v2 YAML under ``corpus/traps/`` into typed, validated specs.
+A malformed trap is a hard error here, never a silently dropped record, and the
+suite-level facts fall out of the same pass: the dev/held-out split, the
+provenance mix (taxonomy vs. external), and the two-annotator label vectors.
 
-Parsing a trap here does *not* evaluate it: producing a ``TrapOutcome`` needs a
-proposer run and belongs to the grid (N4). This module is the offline,
-model-free gate that guarantees the traps are well-formed before any of that
-spend happens.
+Parsing a trap is not evaluating it -- a ``TrapOutcome`` needs a proposer run.
+This is the offline, model-free gate that catches a broken trap before any of
+that spend happens.
 """
 
 from __future__ import annotations

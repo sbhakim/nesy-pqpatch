@@ -5,13 +5,13 @@ file, so a content-only applier suffices and no working-directory path
 reconciliation is needed (ADR-003). Not a general diff engine by intent.
 
 Real models emit hunks with wrong line numbers and off-by-a-space context
-(observed against qwen2.5-coder / llama3.1 / gemma3 via Ollama), so the applier
-anchors each hunk by its *content* rather than trusting the ``@@`` offset, and
-tolerates leading/trailing whitespace in the matched context. It stays
-deliberately conservative to protect the load-bearing safety property: a hunk is
-applied only where its old block matches unambiguously, and anything else raises
-rather than guess -- a mis-located patch that still compiled would be a false
-accept, the one error direction this component must never take.
+(seen with qwen2.5-coder, llama3.1, and gemma3 via Ollama), so each hunk is
+anchored by its *content* instead of trusting the ``@@`` offset, and leading or
+trailing whitespace in the matched context is tolerated. Beyond that the applier
+stays conservative: a hunk applies only where its old block matches
+unambiguously, and anything else raises instead of guessing. A patch applied at
+the wrong place could still compile, and a false accept is the one direction
+this component must not fail in.
 """
 
 from __future__ import annotations

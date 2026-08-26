@@ -2,10 +2,9 @@
 
 Everything decidable from the patch's added lines alone: parameter floors and
 validity, fallback shapes, exception discipline, randomness sources, hybrid
-presence, diff scope, and the migration obligation. Properties that require
-dataflow belong to L2. All fourteen class-mapped rules plus the two
-cross-cutting ones (scope, obligation) are implemented; docs/STATUS.md is the
-ledger.
+presence, diff scope, and the migration obligation. Anything needing dataflow
+belongs to L2. Fourteen class-mapped rules plus two cross-cutting ones (scope,
+obligation); docs/STATUS.md is the ledger.
 """
 
 from __future__ import annotations

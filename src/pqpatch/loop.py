@@ -1,7 +1,5 @@
-"""The per-site repair loop: propose, verify, feed the violated rule's
-rationale back, and escalate when the attempt bound is exhausted.
-
-Corresponds line-for-line to Algorithm 1 of the accompanying manuscript.
+"""The per-site repair loop: propose, verify, hand the violated rule's
+rationale back to the proposer, and escalate once the attempt bound is spent.
 """
 
 from __future__ import annotations

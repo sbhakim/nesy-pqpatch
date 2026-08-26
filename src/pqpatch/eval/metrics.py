@@ -178,7 +178,7 @@ def mcnemar_exact_p(b: int, c: int) -> float:
     return float(stats.binomtest(min(b, c), n, 0.5, alternative="two-sided").pvalue)
 
 
-# --- Domain-specific estimators (manuscript Sec. 6: RQ0-RQ5 metrics) -------
+# --- Domain-specific estimators -------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -311,7 +311,7 @@ def cohen_kappa(labels_a: Sequence[bool], labels_b: Sequence[bool]) -> float:
     return (observed - expected) / (1 - expected)
 
 
-# --- U-D: difficulty control for the load-bearing catch (plan §12.2) ---------
+# --- Difficulty control: what a compiler would have caught anyway -----------
 
 
 @dataclass(frozen=True, slots=True)
@@ -351,7 +351,7 @@ def compiling_unsafe_fraction(records: Sequence[TrapDifficultyRecord]) -> Estima
     return proportion_estimate([r.compiles for r in unsafe])
 
 
-# --- U-F: seed variance of a rate before caching freezes it (plan §12.3) -----
+# --- Seed variance of a rate, measured before caching freezes it ------------
 
 
 @dataclass(frozen=True, slots=True)

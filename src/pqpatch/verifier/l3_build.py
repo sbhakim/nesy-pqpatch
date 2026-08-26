@@ -1,23 +1,19 @@
 """L3: build-and-test verification.
 
-L3 answers one question: applied to the whole project, does the patch still
-build, and do the project's existing tests still pass? Two execution modes,
-chosen by what the site's project actually provides:
+Does the patch still build, and do the project's own tests still pass? Which
+of two modes runs depends on what the site's project provides.
 
-- **Project mode.** If a `build.yaml` descriptor sits above the site file,
-  the patched project tree is compiled in full and the project's own test
-  entrypoint is run. This is the real L3 -- a multi-file build plus a
-  regression suite -- and it is what the manuscript's L3 claim means.
-- **Single-file mode.** With no descriptor, L3 falls back to a standalone
-  `javac` compile of the patched file. This catches syntax errors but is not
-  a project build; the outcome detail says so, and no result that leans on it
-  may be reported as a full L3 pass. See ADR-002.
+Project mode needs a `build.yaml` descriptor above the site file; it compiles
+the whole patched tree and runs the project's test entrypoint. Without a
+descriptor, L3 falls back to a standalone `javac` compile of the single patched
+file. That catches syntax errors but is not a project build, so the outcome
+detail says as much and no result resting on it counts as a full L3 pass
+(ADR-002).
 
-Both modes short-circuit before running the LLM-independent tools on anything
-but a clean patch application. Runtime conformance of the *migrated* primitive
-(does ML-DSA actually sign and verify) is L4's job, not L3's -- and it needs a
-PQC-capable toolchain (JDK 24 / oqs), which is why the seed project's tests
-deliberately exercise provider-independent behavior only.
+Both modes bail out before running any tool unless the patch applied cleanly.
+Whether the migrated primitive actually works at runtime is L4's job, and it
+needs a PQC-capable toolchain (JDK 24 / oqs) -- which is why the seed project's
+tests stick to provider-independent behavior.
 """
 
 from __future__ import annotations

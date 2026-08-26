@@ -1,9 +1,8 @@
 """Content-addressed response cache: the determinism boundary.
 
 The model request is the only non-deterministic call in the pipeline. Its
-response is cached here, and everything downstream must regenerate from the
-cache with the network disabled. Backends call through this store, never
-around it.
+response is cached here, and everything downstream regenerates from that cache
+with the network off. Backends go through this store, never around it.
 """
 
 from __future__ import annotations

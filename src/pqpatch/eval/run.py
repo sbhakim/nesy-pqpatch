@@ -1,12 +1,12 @@
 """Experiment orchestrator: drive a proposer backend over a corpus app and
 persist an immutable run under ``runs/<config-hash>/``.
 
-Every number the paper reports regenerates from what this writes; nothing is
-typed by hand (eval/tables.py reads these manifests, and only these). A run
-directory is content-addressed by its *configuration* (backend, model, seeds,
-k, enabled layers, corpus, prompt/rule/policy versions) so re-running the same
-configuration overwrites in place rather than accumulating duplicates, while a
-different configuration lands in its own directory.
+Every reported number regenerates from what this writes -- eval/tables.py reads
+these manifests and nothing else. A run directory is content-addressed by its
+*configuration* (backend, model, seeds, k, enabled layers, corpus, and the
+prompt, rule, and policy versions), so re-running the same configuration
+overwrites in place instead of piling up duplicates, and a different one lands
+in its own directory.
 
 Per-site records embed the canonical decision trace, so a run is independently
 auditable and re-verifiable offline without the model. A backend or network

@@ -1,25 +1,22 @@
 """L4 round-trip conformance: sign->verify + tamper->must-fail, and
 encaps->decaps secret match, executed on a real PQC-capable JDK.
 
-The minimal-but-real slice of L4 (manuscript Sec. 4.3): every post-quantum
-algorithm literal the patch introduces at a ``getInstance`` site must resolve
-on the configured runtime and survive its family's round-trip. This is the
-layer that catches patches which are rule-clean and compile yet are
-cryptographically wrong -- most concretely the hallucinated composite
-algorithm name observed live in the ablation shakeout, which satisfied every
-L1/L2 rule and built cleanly but resolves to no provider.
+Every post-quantum algorithm literal the patch introduces at a ``getInstance``
+site must resolve on the configured runtime and survive its family's round
+trip. This is the layer for patches that are rule-clean and compile but are
+cryptographically wrong -- the clearest case being a hallucinated composite
+algorithm name, which passes every L1/L2 rule and builds fine yet resolves to
+no provider.
 
-Honesty contract, three-way:
+Three outcomes, kept distinct so blame lands in the right place. A literal that
+fails while its family works is a FAIL, and that is the patch's fault. A runtime
+missing the whole family is an ERROR -- a gap in the harness, say SLH-DSA before
+a JDK ships it, never charged to the patch. An unset ``PQPATCH_L4_JAVA_HOME``
+raises NotImplementedError, which the orchestrator records as SKIPPED with
+provenance, so CI and non-PQC machines stay green without pretending.
 
-- exact literal fails but its family works       -> **FAIL** (the patch's fault)
-- the runtime lacks the entire family            -> **ERROR** (harness gap --
-  e.g. SLH-DSA before its JDK ships it -- never blamed on the patch)
-- ``PQPATCH_L4_JAVA_HOME`` unconfigured          -> **NotImplementedError**,
-  which the orchestrator records as SKIPPED with full provenance, exactly as
-  the stub behaved -- CI and non-PQC machines stay green and honest.
-
-ACVP known-answer vectors and cross-provider interop (acvp.py / interop.py)
-remain deliberate stubs; this module never claims them.
+ACVP known-answer vectors and cross-provider interop (acvp.py / interop.py) are
+still stubs; this module never claims them.
 """
 
 from __future__ import annotations

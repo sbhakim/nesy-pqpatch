@@ -1,10 +1,10 @@
 """Verifier orchestrator: four layers applied in order, short-circuiting at
 the first violation.
 
-Layers are individually enableable so the pipeline remains usable while the
-deeper layers are under construction; every verdict records which layers
-actually ran, so a partial configuration is visible in the results rather
-than implicit in the code.
+Layers can be enabled individually, so the pipeline stays usable while the
+deeper ones are still being built. Every verdict records which layers actually
+ran, which keeps a partial configuration visible in the results instead of
+buried in the code.
 """
 
 from __future__ import annotations
