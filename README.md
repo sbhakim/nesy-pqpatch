@@ -69,7 +69,7 @@ backend = BackendC(Settings.load(), model="qwen2.5-coder:7b")
 verdict, trace = migrate_site(site, context, policy, backend, k=3)
 ```
 
-`site`, `context`, and `policy` come from `detect`, `extract_context`, and `load_policy`. `settings.py` alone reads the `PQPATCH_*` environment: `OFFLINE` (read-only cache, miss is a hard error), `CACHE_DIR`, `RUNS_DIR`, backend keys.
+The three inputs come from earlier stages: `detect` finds the call site, `extract_context` pulls the surrounding code, and `load_policy` reads Π from `policy/`. `settings.py` alone reads the `PQPATCH_*` environment: `OFFLINE` (read-only cache, miss is a hard error), `CACHE_DIR`, `RUNS_DIR`, backend keys.
 
 ## Reproducibility
 
