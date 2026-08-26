@@ -71,23 +71,19 @@ verdict, trace = migrate_site(site, context, policy, backend, k=3)
 
 The three inputs come from earlier stages: `detect` finds the call site, `extract_context` pulls the surrounding code, and `load_policy` reads Π from `policy/`. `settings.py` alone reads the `PQPATCH_*` environment: `OFFLINE` (read-only cache, miss is a hard error), `CACHE_DIR`, `RUNS_DIR`, backend keys.
 
-## Reproducibility
+## Reproducing the numbers
 
-Everything downstream of the model call is deterministic. Responses are cached under a digest of *(model, version, prompt bytes, seed)*, and offline mode is read-only by construction, so published numbers regenerate with no API access, no network, and no GPU.
+Model responses are cached, so everything after the model call is deterministic. The published numbers regenerate offline, without API keys.
 
 ```bash
-make reproduce-all      # corpus state · detection scoring · manifest tables
-make table-detection    # detector precision/recall vs. Tier-2 ground truth
-make tables             # capability-funnel + trap summaries, .tex fragments
-make icc-report         # evaluation JSON, figure CSVs, TeX result macros
 make verify-offline     # replay cached responses and verifier decisions
-make artifact           # deterministic checksummed evidence ZIP
-make artifact-verify    # verify packaged members against the manifest
+make icc-report         # evaluation JSON, figure CSVs, TeX result macros
+make reproduce-all      # corpus state, detection scoring, manifest tables
+make artifact           # checksummed evidence bundle
+make artifact-verify    # check packaged members against the manifest
 ```
 
-`make artifact` packages runs, the required cache, a source snapshot, manuscript inputs, and Tier-1 mutated counterparts, marking a dirty worktree when applicable. It is a local package with no DOI until deposited publicly.
-
-Ablation arms are frozen in `pqpatch.eval.ablations`: `full`, `remove-l2`, `l3-only`, `no-repair`, `generic-feedback`, `stock-l1`. Residual unsafe-accept rates need blind adjudication of every accepted proposal (`pqpatch.eval.adjudicate`) — here by three disclosed, proposer-disjoint LLM judges — and RUA is refused while an acceptance is unlabeled.
+The bundle is local; it gets a DOI only once deposited. Ablation arms are named in `pqpatch.eval.ablations`, and RUA stays uncomputed until every accepted proposal carries a blind label (`pqpatch.eval.adjudicate`).
 
 ## Repository layout
 
