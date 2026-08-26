@@ -1,9 +1,8 @@
 """Canonical trace serialization and content hashing.
 
-A trace serializes to the same bytes on any machine -- sorted keys, fixed
-separators -- and its SHA-256 digest is the value that attestation signs.
-The digest and signature fields are excluded from the serialization they
-authenticate.
+Sorted keys and fixed separators, so a trace serializes to the same bytes on any
+machine; its SHA-256 digest is what attestation signs. The digest and signature
+fields stay out of the serialization they authenticate.
 """
 
 from __future__ import annotations

@@ -1,9 +1,9 @@
 """Non-mutating offline replay of the six ICC trap grids.
 
-For every scored proposal this command reconstructs the versioned prompt,
-loads the exact content-addressed response with networking disabled, confirms
-that parsing yields the stored diff, and re-runs the recorded verifier layers
-plus the L3-only baseline.  It never writes a run directory.
+For each scored proposal it rebuilds the versioned prompt, loads the exact
+cached response with networking off, checks that parsing still yields the stored
+diff, and re-runs the recorded verifier layers alongside the L3-only baseline.
+Nothing is written to a run directory.
 """
 
 from __future__ import annotations

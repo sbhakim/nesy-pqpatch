@@ -1,21 +1,18 @@
 """Tier-1 surface mutation: semantics-preserving, contamination-controlling.
 
-Public benchmarks are plausibly memorized, so every Tier-1 case also exists in
-a mutated-surface variant and results are reported on both surfaces side by
-side (manuscript, Tier 1). This module produces that variant deterministically:
+Public benchmarks are plausibly memorized, so every Tier-1 case also exists as a
+mutated-surface variant and both surfaces are reported side by side. This module
+produces that variant deterministically. The class identifier and its ``.java``
+file are renamed from a stable digest of (case, old name). Local variables and
+parameters are renamed only when the name is not also declared as a field,
+method, or class somewhere in the file -- a scope-naive rewrite of such a name
+could change behavior, so those are skipped rather than guessed at. Line and
+block comments are stripped.
 
-- **class + file rename** -- the class identifier and its ``.java`` file get a
-  new name derived from a stable digest of (case, old name);
-- **conservative local-identifier rename** -- local variables and parameters
-  are renamed only when the name is not *also* declared as a field, method, or
-  class anywhere in the file (a scope-naive rewrite of such a name could change
-  semantics, so those names are skipped, never guessed at);
-- **comment stripping** -- line and block comments are removed.
-
-What it deliberately never touches: **string literals** (the algorithm strings
-are the misuse under test -- neutralizing those would change the case, not its
-surface) and any identifier it cannot rename safely. Mutation is total surface
-noise, zero semantic delta; ``javac`` equivalence is the test suite's check.
+Two things it never touches: string literals, since the algorithm strings *are*
+the misuse under test and rewriting them would change the case rather than its
+surface, and any identifier it cannot rename safely. The mutation is all surface
+and no semantics; ``javac`` equivalence is what the test suite checks.
 
 Rewrites are token-exact: only ``identifier`` AST nodes are rewritten, by byte
 span, so occurrences inside strings and comments are untouched by the rename

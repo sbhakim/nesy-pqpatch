@@ -1,9 +1,8 @@
 """Context extraction for the proposer.
 
-Enclosing method and class are recovered by a brace-depth scan, which is
-sufficient for the corpus's conventional Java style. One-hop caller/callee
-extraction is not yet implemented; those fields remain empty until it is
-(docs/STATUS.md).
+Enclosing method and class come from a brace-depth scan, which handles the
+conventional Java style the corpus uses. One-hop caller/callee extraction is not
+implemented yet, so those fields stay empty (docs/STATUS.md).
 """
 
 from __future__ import annotations

@@ -1,23 +1,21 @@
 """Drive the blind judge panel over a trap run's accepted proposals.
 
-This is the step that makes RUA computable. eval/trap_run.py deliberately
-refuses to decide whether an ACCEPTED proposal is unsafe -- deciding it
-mechanically would be circular -- so every accepted proposal is stored with its
-diff and flagged `needs_adjudication`. Here each one is shown to the judge panel
-and the verdicts are written into the run's `adjudications.json`, where
-eval/adjudicate.trap_outcomes joins them into RUA.
+This is the step that makes RUA computable. eval/trap_run.py will not decide
+whether an ACCEPTED proposal is unsafe -- deciding that mechanically would be
+circular -- so accepted proposals are stored with their diffs and flagged
+`needs_adjudication`. Here each one goes to the judge panel and the verdicts land
+in the run's `adjudications.json`, which eval/adjudicate.trap_outcomes joins into
+RUA.
 
-Three properties are load-bearing and each is enforced here rather than assumed:
-
-- **Blind.** The judge sees the pre-migration source with its leading comment
-  block stripped, the candidate diff, and the policy. Trap fixtures carry their
-  provenance -- id, unsafe class, target rule, the intended unsafe completion --
-  in that header, so passing the raw file would hand the judge the answer. This
-  is the same leak that prompt v2 had to close on the proposer side.
-- **Disjoint.** assert_judges_disjoint refuses a judge that is also a proposer.
-- **Refusal-tolerant.** A judge that declines is recorded as having declined and
-  is not counted as a vote. A patch decided by fewer than two judges is reported
-  as undecided rather than labelled by one model alone.
+Three properties are enforced here rather than assumed. Judges are blind: they
+see the pre-migration source with its leading comment block stripped, the diff,
+and the policy. That header carries the trap's id, unsafe class, target rule, and
+intended unsafe completion, so handing over the raw file would hand over the
+answer -- the same leak prompt v2 had to close on the proposer side. Judges are
+disjoint from proposers, which assert_judges_disjoint enforces. And refusals
+count as refusals: a judge that declines is recorded as declining, not as a vote,
+and a patch decided by fewer than two judges is reported undecided rather than
+labelled by one model alone.
 
 Nothing here silently drops a row: refusals, transport failures and undecided
 patches are all written to the run directory.

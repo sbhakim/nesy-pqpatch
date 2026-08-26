@@ -1,8 +1,8 @@
 """Build and verify a deterministic development artifact for the ICC study.
 
-The archive contains the exact source snapshot, the six selected ICC runs,
-their required cached responses, and generated manuscript inputs.  It is a
-local development artifact, not a claim of an immutable public deposit or DOI.
+The archive holds the exact source snapshot, the six selected ICC runs, the
+cached responses they need, and the generated manuscript inputs. It is a local
+development artifact -- not an immutable public deposit, and not a DOI.
 """
 
 from __future__ import annotations

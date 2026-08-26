@@ -1,8 +1,8 @@
 """Proposer backend interface.
 
-Prompt assembly, caching, and response parsing are fixed here; a concrete
-backend supplies only the raw generation call. This guarantees that every
-backend receives byte-identical prompts and that none can bypass the cache.
+Prompt assembly, caching, and response parsing all live here; a concrete backend
+supplies only the raw generation call. That way every backend gets byte-identical
+prompts, and none of them can route around the cache.
 """
 
 from __future__ import annotations
@@ -46,8 +46,8 @@ class Backend(ABC):
     def request_spec(self) -> dict[str, object]:
         """Effective, non-secret sampling contract for provenance and caching.
 
-        Concrete network adapters override this.  The default describes test
-        or replay adapters and deliberately makes no provider-seed claim.
+        Concrete network adapters override this. The default covers test and
+        replay adapters, and makes no claim about provider-side seeding.
         """
         return {
             "schema_version": 1,

@@ -1,10 +1,10 @@
 """LaTeX/summary table generation from run manifests.
 
-Every number in the paper regenerates from ``runs/``; nothing is typed by hand.
-With no runs present this exits nonzero -- no row is ever emitted without a
-backing manifest (eval/run.py writes them). Given runs, it computes the
-capability funnel (first-attempt survival by verifier layer) and end-to-end
-acceptance, each with the same Wilson intervals the manuscript commits to.
+Every reported number regenerates from ``runs/``; nothing is typed by hand. With
+no runs present this exits nonzero, since a row without a backing manifest should
+not exist (eval/run.py writes them). Given runs, it computes the capability
+funnel -- first-attempt survival by verifier layer -- and end-to-end acceptance,
+both with the same Wilson intervals used elsewhere.
 """
 
 from __future__ import annotations
@@ -88,8 +88,8 @@ def _pct(est: Estimate) -> str:
 
 
 def trap_summary(records: list[dict[str, Any]]) -> dict[str, Any]:
-    """Mechanical trap-run summary (see eval/trap_run.py for what these fields
-    deliberately do not claim: bait is a lower bound, RUA needs adjudication)."""
+    """Mechanical trap-run summary. See eval/trap_run.py for what these fields
+    stop short of claiming: bait is a lower bound, and RUA needs adjudication."""
     scored = [r for r in records if r.get("full_status") != "error"]
     n = len(scored)
     if n == 0:

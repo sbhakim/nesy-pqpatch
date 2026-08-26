@@ -1,7 +1,7 @@
 """Detection engine: runs the Semgrep rule pack and parses its findings.
 
-The only module that invokes Semgrep. Zero findings is a valid quiet
-success; a failed invocation is an exception, never an empty result.
+The only module that invokes Semgrep. Zero findings is a normal, quiet success;
+a failed invocation raises rather than returning an empty result.
 """
 
 from __future__ import annotations

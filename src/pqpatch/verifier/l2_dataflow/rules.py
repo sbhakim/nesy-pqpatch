@@ -1,4 +1,4 @@
-"""Registered L2 dataflow rules."""
+"""The eight registered L2 rules, each backed by an analysis in java_flow."""
 
 from __future__ import annotations
 
